@@ -5,6 +5,8 @@ package main
 import (
 	"encoding/json" // nos permite convertir datos Go a formato JSON y viceversa
 	"errors"        // nos permite crear mensajes de error personalizados
+	"fmt"           // nos permite imprimir mensajes con formato en pantalla
+	"log"           // nos permite registrar errores graves y detener el programa de forma segura
 	"os"            // nos permite leer y escribir archivos en el sistema
 	"sync"          // nos permite proteger los datos cuando hay acceso simultáneo
 )
@@ -101,8 +103,32 @@ func (pm *PersistenceManager) Claves() []string {
 	return claves
 }
 
+// Existe verifica si una clave está guardada, sin necesidad de obtener su valor.
+// Útil cuando solo quieres saber si algo existe antes de buscarlo.
+func (pm *PersistenceManager) Existe(clave string) bool {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	_, existe := pm.datos[clave]
+	return existe
+}
+
+// LimpiarTodo borra todos los datos guardados, tanto en memoria como en el archivo.
+// Úsalo con cuidado: no se puede deshacer.
+func (pm *PersistenceManager) LimpiarTodo() error {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	// Vaciamos el mapa creando uno nuevo vacío
+	pm.datos = make(map[string]interface{})
+
+	// Guardamos el estado vacío en el archivo
+	return pm.persistir()
+}
+
 // persistir escribe el contenido del mapa en el archivo JSON.
-// Este método es interno (letra minúscula), solo lo usa el propio gestor.
+// Usa escritura atómica: primero escribe en un archivo temporal y luego lo renombra.
+// Esto evita que el archivo quede corrupto si el programa se cierra a mitad de escritura.
 func (pm *PersistenceManager) persistir() error {
 	// Convertimos el mapa a formato JSON con sangría (más fácil de leer)
 	contenido, err := json.MarshalIndent(pm.datos, "", "  ")
@@ -110,8 +136,14 @@ func (pm *PersistenceManager) persistir() error {
 		return err
 	}
 
-	// Escribimos el JSON en el archivo (0644 = el dueño puede leer/escribir, otros solo leer)
-	return os.WriteFile(pm.rutaArchivo, contenido, 0644)
+	// Escribimos primero en un archivo temporal (seguridad ante cortes de luz o cierres bruscos)
+	rutaTemporal := pm.rutaArchivo + ".tmp"
+	if err := os.WriteFile(rutaTemporal, contenido, 0644); err != nil {
+		return err
+	}
+
+	// Renombramos el temporal al archivo definitivo (operación atómica en la mayoría de sistemas)
+	return os.Rename(rutaTemporal, pm.rutaArchivo)
 }
 
 // cargar lee el archivo JSON y carga los datos en memoria.
@@ -133,7 +165,8 @@ func main() {
 	// Creamos el gestor, usando "datos.json" como archivo de almacenamiento
 	pm, err := NuevoPersistenceManager("datos.json")
 	if err != nil {
-		panic("No se pudo iniciar el gestor de persistencia: " + err.Error())
+		// log.Fatal es más seguro que panic: muestra el error y cierra el programa limpiamente
+		log.Fatal("No se pudo iniciar el gestor de persistencia: ", err)
 	}
 
 	// Guardamos algunos valores de ejemplo
@@ -143,15 +176,20 @@ func main() {
 
 	// Recuperamos y mostramos un valor
 	if valor, existe := pm.Obtener("nombre"); existe {
-		println("Nombre guardado:", valor.(string))
+		fmt.Printf("Nombre guardado: %v\n", valor)
+	}
+
+	// Verificamos si una clave existe sin necesidad de obtener su valor
+	if pm.Existe("activo") {
+		fmt.Println("La clave 'activo' existe en el almacenamiento")
 	}
 
 	// Eliminamos una clave
 	_ = pm.Eliminar("version")
 
 	// Mostramos todas las claves que quedan
-	println("Claves actuales:")
+	fmt.Println("Claves actuales:")
 	for _, clave := range pm.Claves() {
-		println(" -", clave)
+		fmt.Println(" -", clave)
 	}
 }
