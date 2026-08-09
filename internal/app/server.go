@@ -286,7 +286,16 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAdminLeads(w http.ResponseWriter, r *http.Request) {
 	providedToken := r.Header.Get("X-Admin-Token")
-	if s.adminToken == "" || providedToken == "" || !secureTokenMatch(providedToken, s.adminToken) {
+	expectedToken := s.adminToken
+	if expectedToken == "" {
+		expectedToken = "admin-disabled"
+	}
+	comparisonToken := providedToken
+	if comparisonToken == "" {
+		comparisonToken = "missing-admin-token"
+	}
+	matches := secureTokenMatch(comparisonToken, expectedToken)
+	if s.adminToken == "" || providedToken == "" || !matches {
 		logSecurityEvent(r, "admin_auth_failed")
 		http.Error(w, "no autorizado", http.StatusUnauthorized)
 		return
@@ -597,7 +606,7 @@ func clientIP(r *http.Request) string {
 	if addr, err := netip.ParseAddr(r.RemoteAddr); err == nil {
 		return addr.String()
 	}
-	if strings.Contains(host, ":") {
+	if strings.Count(host, ":") == 1 {
 		if idx := strings.LastIndex(host, ":"); idx > 0 {
 			return host[:idx]
 		}
