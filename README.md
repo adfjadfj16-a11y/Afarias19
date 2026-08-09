@@ -18,8 +18,7 @@ Afarias19 ahora incluye un MVP de **software SaaS de atención con IA** pensado 
 ## Arquitectura
 
 - `cmd/server`: arranque del servidor HTTP
-- `internal/app`: lógica de negocio, endpoints y almacenamiento
-- `web`: landing page del producto
+- `internal/app`: lógica de negocio, endpoints, almacenamiento y landing page embebida
 
 ## Endpoints principales
 

@@ -22,7 +22,7 @@ const (
 	maxBodyBytes  = 1 << 20
 )
 
-//go:embed ../../web/index.html
+//go:embed index.html
 var webFS embed.FS
 
 type Config struct {
@@ -73,7 +73,7 @@ type LeadStore struct {
 }
 
 func NewServer(cfg Config) (*Server, error) {
-	page, err := webFS.ReadFile("../../web/index.html")
+	page, err := webFS.ReadFile("index.html")
 	if err != nil {
 		return nil, fmt.Errorf("read landing page: %w", err)
 	}
