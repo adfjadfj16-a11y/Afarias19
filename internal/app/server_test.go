@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -66,6 +67,34 @@ func TestCreateLeadRejectsInvalidEmail(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSignupFormReturnsHTMLConfirmation(t *testing.T) {
+	server := newTestServer(t)
+	server.now = func() time.Time {
+		return time.Date(2026, time.January, 2, 15, 4, 5, 0, time.UTC)
+	}
+
+	form := "name=Ana&email=ana%40example.com&company=Acme&goal=mejorar+soporte"
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("content-type = %q, want %q", got, "text/html; charset=utf-8")
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "<h1>Registro confirmado</h1>") {
+		t.Fatalf("body missing confirmation heading: %q", body)
+	}
+	if !strings.Contains(body, "2026-02-01") {
+		t.Fatalf("body missing rendered date: %q", body)
 	}
 }
 

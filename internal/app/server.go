@@ -28,6 +28,29 @@ const (
 	rateLimitMax  = 20
 )
 
+var thankYouPageTemplate = template.Must(template.New("thanks").Parse(`
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Registro confirmado</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    main { max-width: 720px; margin: 4rem auto; padding: 2rem; background: #111827; border-radius: 16px; }
+    a { color: #38bdf8; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Registro confirmado</h1>
+    <p>Tu prueba gratuita quedó activa. El período actual termina el <strong>{{ . }}</strong>.</p>
+    <p>Puedes volver a la página principal para seguir explorando la propuesta del producto.</p>
+    <p><a href="/">Volver al inicio</a></p>
+  </main>
+</body>
+</html>`))
+
 //go:embed index.html
 var webFS embed.FS
 
@@ -158,7 +181,9 @@ func (s *Server) handleSignupForm(w http.ResponseWriter, r *http.Request) {
 
 	page, err := renderThankYouPage(lead.TrialEndsAt)
 	if err != nil {
-		http.Error(w, "no se pudo generar la confirmación", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("<h1>No se pudo generar la confirmación</h1>"))
 		return
 	}
 
@@ -337,31 +362,8 @@ func suggestActions(message string) []string {
 }
 
 func renderThankYouPage(trialEndsAt time.Time) (string, error) {
-	const tpl = `
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Registro confirmado</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
-    main { max-width: 720px; margin: 4rem auto; padding: 2rem; background: #111827; border-radius: 16px; }
-    a { color: #38bdf8; }
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Registro confirmado</h1>
-    <p>Tu prueba gratuita quedó activa. El período actual termina el <strong>{{ . }}</strong>.</p>
-    <p>Puedes volver a la página principal para seguir explorando la propuesta del producto.</p>
-    <p><a href="/">Volver al inicio</a></p>
-  </main>
-</body>
-</html>`
-
 	var out bytes.Buffer
-	if err := template.Must(template.New("thanks").Parse(tpl)).Execute(&out, trialEndsAt.Format("2006-01-02")); err != nil {
+	if err := thankYouPageTemplate.Execute(&out, trialEndsAt.Format("2006-01-02")); err != nil {
 		return "", fmt.Errorf("render thank-you page: %w", err)
 	}
 	return out.String(), nil
