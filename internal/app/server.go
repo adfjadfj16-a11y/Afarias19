@@ -80,7 +80,7 @@ type Lead struct {
 	Company       string    `json:"company"`
 	Goal          string    `json:"goal"`
 	Plan          string    `json:"plan"`
-	PaymentMethod string    `json:"paymentMethod"`
+	PaymentMethod string    `json:"paymentMethod,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	TrialEndsAt   time.Time `json:"trialEndsAt"`
 }
@@ -289,10 +289,7 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 	if _, err := mail.ParseAddress(email); err != nil {
 		return Lead{}, errors.New("el correo no es válido")
 	}
-	if paymentMethod == "" {
-		paymentMethod = voluntaryPaymentMethods[0]
-	}
-	if !isSupportedPaymentMethod(paymentMethod) {
+	if paymentMethod != "" && !isSupportedPaymentMethod(paymentMethod) {
 		return Lead{}, errors.New("el método de pago no es válido")
 	}
 
