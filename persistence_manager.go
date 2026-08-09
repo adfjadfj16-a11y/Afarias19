@@ -151,12 +151,15 @@ func (pm *PersistenceManager) persistir() error {
 	closeGzErr := gz.Close()
 	closeFileErr := f.Close()
 	if encErr != nil {
+		os.Remove(rutaTemporal)
 		return encErr
 	}
 	if closeGzErr != nil {
+		os.Remove(rutaTemporal)
 		return closeGzErr
 	}
 	if closeFileErr != nil {
+		os.Remove(rutaTemporal)
 		return closeFileErr
 	}
 
