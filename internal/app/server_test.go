@@ -132,7 +132,14 @@ func TestAssistant(t *testing.T) {
 	if !strings.Contains(resp.Reply, "USD 1") {
 		t.Fatalf("reply = %q, want pricing from USD 1", resp.Reply)
 	}
-	if len(resp.Actions) == 0 || !strings.Contains(strings.Join(resp.Actions, " "), "USD 1") {
+	foundFlexiblePricingAction := false
+	for _, action := range resp.Actions {
+		if action == "explicar precio flexible desde USD 1" {
+			foundFlexiblePricingAction = true
+			break
+		}
+	}
+	if !foundFlexiblePricingAction {
 		t.Fatalf("actions = %v, want flexible pricing action", resp.Actions)
 	}
 }
