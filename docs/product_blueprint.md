@@ -26,7 +26,7 @@ Fuentes públicas revisadas en agosto de 2026:
 
 Afarias19 se posiciona como una propuesta propia con:
 
-- **30 días gratis** y cobro desde el segundo mes
+- **30 días gratis** y pago flexible desde **USD 1** a partir del segundo mes
 - **arquitectura sin dependencias externas** para arrancar con control total
 - **IA inicial local** para preguntas frecuentes
 - **base segura** desde el MVP

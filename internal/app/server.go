@@ -22,10 +22,10 @@ import (
 )
 
 const (
-	freeTrialDays = 30
-	paidMonthly   = 19.99
-	maxBodyBytes  = 1 << 20
-	rateLimitMax  = 20
+	freeTrialDays      = 30
+	minMonthlyPriceUSD = 1.0
+	maxBodyBytes       = 1 << 20
+	rateLimitMax       = 20
 )
 
 var thankYouPageTemplate = template.Must(template.New("thanks").Parse(`
@@ -198,10 +198,12 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handlePlans(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"freeTrialDays": freeTrialDays,
-		"currency":      "USD",
-		"monthlyPrice":  paidMonthly,
-		"billingStarts": "after the first month",
+		"freeTrialDays":  freeTrialDays,
+		"currency":       "USD",
+		"monthlyPrice":   minMonthlyPriceUSD,
+		"billingStarts":  "after the first month",
+		"pricingModel":   "pay-what-you-can",
+		"pricingMessage": "paga desde USD 1 en adelante según tu presupuesto",
 		"features": []string{
 			"captura de prospectos",
 			"asistente de atención inicial",
@@ -334,7 +336,7 @@ func buildAssistantReply(message, msgContext string) string {
 
 	switch {
 	case strings.Contains(lowerMessage, "precio") || strings.Contains(lowerMessage, "plan"):
-		return "Ofrecemos 30 días gratis para validar el servicio y luego un plan mensual simple para seguir atendiendo clientes con rapidez y seguridad."
+		return "Ofrecemos 30 días gratis para validar el servicio y luego un esquema flexible para pagar desde USD 1 en adelante según lo que tu negocio pueda asumir."
 	case strings.Contains(lowerMessage, "seguridad"):
 		return "La propuesta prioriza validación de entradas, control de acceso administrativo, almacenamiento atómico y reducción de exposición de datos."
 	case strings.Contains(lowerMessage, "ia") || strings.Contains(lowerMessage, "automat"):
@@ -356,7 +358,7 @@ func suggestActions(message string) []string {
 		actions = append(actions, "explicar controles de acceso")
 	}
 	if strings.Contains(lower, "precio") || strings.Contains(lower, "plan") {
-		actions = append(actions, "explicar inicio del cobro desde el segundo mes")
+		actions = append(actions, "explicar precio flexible desde USD 1")
 	}
 	return actions
 }

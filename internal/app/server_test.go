@@ -124,6 +124,45 @@ func TestAssistant(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
+
+	var resp assistantResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !strings.Contains(resp.Reply, "USD 1") {
+		t.Fatalf("reply = %q, want pricing from USD 1", resp.Reply)
+	}
+	if len(resp.Actions) == 0 || !strings.Contains(strings.Join(resp.Actions, " "), "USD 1") {
+		t.Fatalf("actions = %v, want flexible pricing action", resp.Actions)
+	}
+}
+
+func TestPlansExposeFlexiblePricing(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/plans", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	gotPrice, ok := resp["monthlyPrice"].(float64)
+	if !ok {
+		t.Fatalf("monthlyPrice type = %T, want float64", resp["monthlyPrice"])
+	}
+	if gotPrice != minMonthlyPriceUSD {
+		t.Fatalf("monthlyPrice = %v, want %v", gotPrice, minMonthlyPriceUSD)
+	}
+	if got := resp["pricingModel"]; got != "pay-what-you-can" {
+		t.Fatalf("pricingModel = %v, want pay-what-you-can", got)
+	}
 }
 
 func TestRateLimitByIP(t *testing.T) {
