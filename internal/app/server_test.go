@@ -72,9 +72,8 @@ func TestCreateLeadRejectsInvalidEmail(t *testing.T) {
 
 func TestSignupFormReturnsHTMLConfirmation(t *testing.T) {
 	server := newTestServer(t)
-	server.now = func() time.Time {
-		return time.Date(2026, time.January, 2, 15, 4, 5, 0, time.UTC)
-	}
+	now := time.Date(2026, time.January, 2, 15, 4, 5, 0, time.UTC)
+	server.now = func() time.Time { return now }
 
 	form := "name=Ana&email=ana%40example.com&company=Acme&goal=mejorar+soporte"
 	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form))
@@ -93,7 +92,8 @@ func TestSignupFormReturnsHTMLConfirmation(t *testing.T) {
 	if !strings.Contains(body, "<h1>Registro confirmado</h1>") {
 		t.Fatalf("body missing confirmation heading: %q", body)
 	}
-	if !strings.Contains(body, "2026-02-01") {
+	expectedDate := now.Add(freeTrialDays * 24 * time.Hour).Format("2006-01-02")
+	if !strings.Contains(body, expectedDate) {
 		t.Fatalf("body missing rendered date: %q", body)
 	}
 }
