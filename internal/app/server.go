@@ -456,10 +456,6 @@ func secureTokenMatch(provided, expected string) bool {
 }
 
 func clientIP(r *http.Request) string {
-	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]); forwarded != "" {
-		return forwarded
-	}
-
 	host := r.RemoteAddr
 	if addr, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
 		return addr.Addr().String()
