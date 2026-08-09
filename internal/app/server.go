@@ -29,6 +29,8 @@ const (
 	rateLimitMax       = 20
 )
 
+var voluntaryPaymentMethods = []string{"transferencia", "tarjeta", "paypal"}
+
 var thankYouPageTemplate = template.Must(template.New("thanks").Parse(`
 <!doctype html>
 <html lang="es">
@@ -78,15 +80,17 @@ type Lead struct {
 	Company     string    `json:"company"`
 	Goal        string    `json:"goal"`
 	Plan        string    `json:"plan"`
+	PaymentMethod string  `json:"paymentMethod"`
 	CreatedAt   time.Time `json:"createdAt"`
 	TrialEndsAt time.Time `json:"trialEndsAt"`
 }
 
 type leadInput struct {
-	Name    string `json:"name"`
-	Email   string `json:"email"`
-	Company string `json:"company"`
-	Goal    string `json:"goal"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	Company       string `json:"company"`
+	Goal          string `json:"goal"`
+	PaymentMethod string `json:"paymentMethod"`
 }
 
 type assistantRequest struct {
@@ -177,10 +181,11 @@ func (s *Server) handleSignupForm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lead, err := s.createLead(leadInput{
-		Name:    r.FormValue("name"),
-		Email:   r.FormValue("email"),
-		Company: r.FormValue("company"),
-		Goal:    r.FormValue("goal"),
+		Name:          r.FormValue("name"),
+		Email:         r.FormValue("email"),
+		Company:       r.FormValue("company"),
+		Goal:          r.FormValue("goal"),
+		PaymentMethod: r.FormValue("paymentMethod"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -202,6 +207,7 @@ func (s *Server) handlePlans(w http.ResponseWriter, _ *http.Request) {
 		"billingStarts":  "after the first month",
 		"pricingModel":   "pay-what-you-can",
 		"pricingMessage": "paga desde USD 1 en adelante según tu presupuesto",
+		"paymentMethods": voluntaryPaymentMethods,
 		"features": []string{
 			"captura de prospectos",
 			"asistente de atención inicial",
@@ -269,6 +275,7 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 	email := strings.TrimSpace(input.Email)
 	company := strings.TrimSpace(input.Company)
 	goal := strings.TrimSpace(input.Goal)
+	paymentMethod := strings.ToLower(strings.TrimSpace(input.PaymentMethod))
 
 	if name == "" {
 		return Lead{}, errors.New("el nombre es obligatorio")
@@ -281,6 +288,12 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
 		return Lead{}, errors.New("el correo no es válido")
+	}
+	if paymentMethod == "" {
+		paymentMethod = voluntaryPaymentMethods[0]
+	}
+	if !isSupportedPaymentMethod(paymentMethod) {
+		return Lead{}, errors.New("el método de pago no es válido")
 	}
 
 	now := s.now().UTC()
@@ -295,6 +308,7 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 		Company:     company,
 		Goal:        goal,
 		Plan:        "trial",
+		PaymentMethod: paymentMethod,
 		CreatedAt:   now,
 		TrialEndsAt: now.Add(freeTrialDays * 24 * time.Hour),
 	}
@@ -335,6 +349,8 @@ func buildAssistantReply(message, msgContext string) string {
 	switch {
 	case strings.Contains(lowerMessage, "precio") || strings.Contains(lowerMessage, "plan"):
 		return "Ofrecemos 30 días gratis para validar el servicio y luego un esquema flexible para pagar desde USD 1 en adelante según lo que tu negocio pueda asumir."
+	case strings.Contains(lowerMessage, "pago") || strings.Contains(lowerMessage, "tarjeta") || strings.Contains(lowerMessage, "transfer"):
+		return "El MVP ya permite indicar un método de pago voluntario preferido entre transferencia, tarjeta o PayPal para preparar el seguimiento comercial después del mes gratis."
 	case strings.Contains(lowerMessage, "seguridad"):
 		return "La propuesta prioriza validación de entradas, control de acceso administrativo, almacenamiento atómico y reducción de exposición de datos."
 	case strings.Contains(lowerMessage, "ia") || strings.Contains(lowerMessage, "automat"):
@@ -358,7 +374,19 @@ func suggestActions(message string) []string {
 	if strings.Contains(lower, "precio") || strings.Contains(lower, "plan") {
 		actions = append(actions, "explicar precio flexible desde USD 1")
 	}
+	if strings.Contains(lower, "pago") || strings.Contains(lower, "tarjeta") || strings.Contains(lower, "transfer") {
+		actions = append(actions, "registrar método de pago voluntario")
+	}
 	return actions
+}
+
+func isSupportedPaymentMethod(method string) bool {
+	for _, supportedMethod := range voluntaryPaymentMethods {
+		if method == supportedMethod {
+			return true
+		}
+	}
+	return false
 }
 
 func handleRegistrationConfirmation(w http.ResponseWriter, lead Lead) {

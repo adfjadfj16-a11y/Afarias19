@@ -27,7 +27,7 @@ Más detalle en `docs/product_blueprint.md`.
 - `GET /` landing page
 - `POST /signup` registro desde formulario web
 - `GET /api/healthz` estado del servicio
-- `GET /api/plans` detalle del plan gratis y del esquema de pago flexible
+- `GET /api/plans` detalle del plan gratis, del esquema de pago flexible y de los métodos de pago voluntario
 - `POST /api/leads` registro de prospectos vía JSON
 - `POST /api/assistant` respuestas iniciales del asistente
 - `GET /api/admin/leads` listado administrativo protegido por token
@@ -68,6 +68,7 @@ curl -X POST http://localhost:8080/api/leads \
     "name":"Ana Pérez",
     "email":"ana@example.com",
     "company":"Comercial Norte",
-    "goal":"automatizar atención inicial"
+    "goal":"automatizar atención inicial",
+    "paymentMethod":"transferencia"
   }'
 ```

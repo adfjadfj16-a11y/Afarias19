@@ -53,6 +53,9 @@ func TestCreateLead(t *testing.T) {
 	if lead.Email != "ana@example.com" {
 		t.Fatalf("email = %q", lead.Email)
 	}
+	if lead.PaymentMethod != "transferencia" {
+		t.Fatalf("paymentMethod = %q, want transferencia", lead.PaymentMethod)
+	}
 }
 
 func TestCreateLeadRejectsInvalidEmail(t *testing.T) {
@@ -95,6 +98,44 @@ func TestSignupFormReturnsHTMLConfirmation(t *testing.T) {
 	expectedDate := now.Add(freeTrialDays * 24 * time.Hour).Format("02/01/2006")
 	if !strings.Contains(body, expectedDate) {
 		t.Fatalf("body missing rendered date: %q", body)
+	}
+}
+
+func TestCreateLeadStoresVoluntaryPaymentMethod(t *testing.T) {
+	server := newTestServer(t)
+
+	body := bytes.NewBufferString(`{"name":"Ana","email":"ana@example.com","company":"Acme","goal":"mejorar soporte","paymentMethod":"paypal"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/leads", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+
+	var lead Lead
+	if err := json.Unmarshal(rec.Body.Bytes(), &lead); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if lead.PaymentMethod != "paypal" {
+		t.Fatalf("paymentMethod = %q, want paypal", lead.PaymentMethod)
+	}
+}
+
+func TestCreateLeadRejectsUnknownPaymentMethod(t *testing.T) {
+	server := newTestServer(t)
+
+	body := bytes.NewBufferString(`{"name":"Ana","email":"ana@example.com","company":"Acme","goal":"mejorar soporte","paymentMethod":"crypto"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/leads", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 
@@ -169,6 +210,13 @@ func TestPlansExposeFlexiblePricing(t *testing.T) {
 	}
 	if got := resp["pricingModel"]; got != "pay-what-you-can" {
 		t.Fatalf("pricingModel = %v, want pay-what-you-can", got)
+	}
+	methods, ok := resp["paymentMethods"].([]any)
+	if !ok {
+		t.Fatalf("paymentMethods type = %T, want []any", resp["paymentMethods"])
+	}
+	if len(methods) != 3 {
+		t.Fatalf("paymentMethods len = %d, want 3", len(methods))
 	}
 }
 

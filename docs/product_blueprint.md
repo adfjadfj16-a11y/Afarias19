@@ -27,6 +27,7 @@ Fuentes públicas revisadas en agosto de 2026:
 Afarias19 se posiciona como una propuesta propia con:
 
 - **30 días gratis** y pago flexible desde **USD 1** a partir del segundo mes
+- **método de pago voluntario** configurable entre transferencia, tarjeta o PayPal
 - **arquitectura sin dependencias externas** para arrancar con control total
 - **IA inicial local** para preguntas frecuentes
 - **base segura** desde el MVP
@@ -65,6 +66,7 @@ Entidad principal implementada:
   - `company`
   - `goal`
   - `plan`
+  - `paymentMethod`
   - `createdAt`
   - `trialEndsAt`
 
@@ -84,6 +86,7 @@ Ya está implementado:
 - API de asistente
 - endpoint administrativo protegido
 - persistencia local
+- captura de preferencia de pago voluntario
 
 ## 9. Validación de calidad y seguridad
 

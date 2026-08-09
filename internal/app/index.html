@@ -84,7 +84,7 @@
       display: grid;
       gap: 0.35rem;
     }
-    input, textarea, button {
+    input, textarea, select, button {
       width: 100%;
       padding: 0.8rem 0.9rem;
       border-radius: 12px;
@@ -166,8 +166,16 @@
         Objetivo principal
         <textarea name="goal" rows="4" required></textarea>
       </label>
+      <label>
+        Método de pago voluntario preferido
+        <select name="paymentMethod">
+          <option value="transferencia">Transferencia</option>
+          <option value="tarjeta">Tarjeta</option>
+          <option value="paypal">PayPal</option>
+        </select>
+      </label>
       <button type="submit">Crear prueba gratuita</button>
-      <p class="muted">Tus datos se usan solo para registrar el prospecto dentro del MVP local.</p>
+      <p class="muted">Tus datos se usan solo para registrar el prospecto y su preferencia de pago voluntario dentro del MVP local.</p>
     </form>
   </main>
 </body>
