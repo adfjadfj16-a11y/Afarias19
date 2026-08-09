@@ -32,7 +32,7 @@ func newTestServerWithConfig(t *testing.T, cfg Config) *Server {
 func TestCreateLead(t *testing.T) {
 	server := newTestServer(t)
 
-	body := bytes.NewBufferString(`{"name":"Ana","email":"ana@example.com","company":"Acme","goal":"mejorar soporte"}`)
+	body := bytes.NewBufferString(`{"name":"Ana","email":"ana@example.com","company":"Acme","goal":"mejorar soporte","paymentMethod":"transferencia"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/leads", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
