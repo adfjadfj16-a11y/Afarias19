@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -272,7 +273,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "el mensaje es obligatorio", http.StatusBadRequest)
 		return
 	}
-	if len(input.Message) > maxMessageLength {
+	if utf8.RuneCountInString(input.Message) > maxMessageLength {
 		http.Error(w, "el mensaje es demasiado largo", http.StatusBadRequest)
 		return
 	}
@@ -313,22 +314,22 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 	if name == "" {
 		return Lead{}, errors.New("el nombre es obligatorio")
 	}
-	if len(name) > maxNameLength {
+	if utf8.RuneCountInString(name) > maxNameLength {
 		return Lead{}, errors.New("el nombre es demasiado largo")
 	}
 	if company == "" {
 		return Lead{}, errors.New("la empresa es obligatoria")
 	}
-	if len(company) > maxCompanyLength {
+	if utf8.RuneCountInString(company) > maxCompanyLength {
 		return Lead{}, errors.New("la empresa es demasiado larga")
 	}
 	if goal == "" {
 		return Lead{}, errors.New("el objetivo es obligatorio")
 	}
-	if len(goal) > maxGoalLength {
+	if utf8.RuneCountInString(goal) > maxGoalLength {
 		return Lead{}, errors.New("el objetivo es demasiado largo")
 	}
-	if len(email) > maxEmailLength {
+	if utf8.RuneCountInString(email) > maxEmailLength {
 		return Lead{}, errors.New("el correo es demasiado largo")
 	}
 	if _, err := mail.ParseAddress(email); err != nil {

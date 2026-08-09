@@ -124,6 +124,26 @@ func TestCreateLeadStoresVoluntaryPaymentMethod(t *testing.T) {
 	}
 }
 
+func TestLandingPageContainsOptionalPaymentMethodSelector(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `name="paymentMethod"`) {
+		t.Fatalf("landing page missing paymentMethod selector: %q", body)
+	}
+	if !strings.Contains(body, `Sin preferencia por ahora`) {
+		t.Fatalf("landing page missing optional payment method placeholder: %q", body)
+	}
+}
+
 func TestCreateLeadOmitsVoluntaryPaymentMethodWhenMissing(t *testing.T) {
 	server := newTestServer(t)
 
@@ -297,6 +317,21 @@ func TestAssistantRejectsOversizedMessage(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestAssistantAcceptsUnicodeMessageWithinCharacterLimit(t *testing.T) {
+	server := newTestServer(t)
+
+	body := bytes.NewBufferString(`{"message":"` + strings.Repeat("á", maxMessageLength) + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/assistant", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 }
 
