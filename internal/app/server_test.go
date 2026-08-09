@@ -92,7 +92,7 @@ func TestSignupFormReturnsHTMLConfirmation(t *testing.T) {
 	if !strings.Contains(body, "<h1>Registro confirmado</h1>") {
 		t.Fatalf("body missing confirmation heading: %q", body)
 	}
-	expectedDate := now.Add(freeTrialDays * 24 * time.Hour).Format("2006-01-02")
+	expectedDate := now.Add(freeTrialDays * 24 * time.Hour).Format("02/01/2006")
 	if !strings.Contains(body, expectedDate) {
 		t.Fatalf("body missing rendered date: %q", body)
 	}

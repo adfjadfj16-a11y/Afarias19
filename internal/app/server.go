@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -11,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
+	"log"
 	"net/http"
 	"net/mail"
 	"net/netip"
@@ -36,9 +37,10 @@ var thankYouPageTemplate = template.Must(template.New("thanks").Parse(`
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Registro confirmado</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
-    main { max-width: 720px; margin: 4rem auto; padding: 2rem; background: #111827; border-radius: 16px; }
-    a { color: #38bdf8; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    main { max-width: 720px; margin: 4rem auto; padding: 2rem; background: #111827; border-radius: 16px; border: 1px solid #1e293b; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -115,6 +117,12 @@ type rateEntry struct {
 	windowStart time.Time
 }
 
+type statusOnWriteResponseWriter struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
+}
+
 func NewServer(cfg Config) (*Server, error) {
 	page, err := webFS.ReadFile("index.html")
 	if err != nil {
@@ -179,17 +187,7 @@ func (s *Server) handleSignupForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := renderThankYouPage(lead.TrialEndsAt)
-	if err != nil {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("<h1>No se pudo generar la confirmación</h1>"))
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
-	_, _ = w.Write([]byte(page))
+	handleRegistrationConfirmation(w, lead)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -363,12 +361,45 @@ func suggestActions(message string) []string {
 	return actions
 }
 
-func renderThankYouPage(trialEndsAt time.Time) (string, error) {
-	var out bytes.Buffer
-	if err := thankYouPageTemplate.Execute(&out, trialEndsAt.Format("2006-01-02")); err != nil {
-		return "", fmt.Errorf("render thank-you page: %w", err)
+func handleRegistrationConfirmation(w http.ResponseWriter, lead Lead) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	responseWriter := &statusOnWriteResponseWriter{
+		ResponseWriter: w,
+		status:         http.StatusCreated,
 	}
-	return out.String(), nil
+	if err := renderThankYouPage(responseWriter, lead.TrialEndsAt); err != nil {
+		log.Printf("render registration confirmation: %v", err)
+		if responseWriter.wroteHeader {
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`<!doctype html><html lang="es"><body style="background:#0f172a;color:#e2e8f0;font-family:sans-serif;padding:2rem;"><h1>No se pudo generar la confirmación</h1><p>Por favor, recarga la página o vuelve más tarde.</p></body></html>`))
+	}
+}
+
+func renderThankYouPage(w io.Writer, trialEndsAt time.Time) error {
+	formattedDate := trialEndsAt.Format("02/01/2006")
+	if err := thankYouPageTemplate.Execute(w, formattedDate); err != nil {
+		return fmt.Errorf("render thank-you page: %w", err)
+	}
+	return nil
+}
+
+func (w *statusOnWriteResponseWriter) WriteHeader(status int) {
+	if w.wroteHeader {
+		return
+	}
+	w.status = status
+	w.wroteHeader = true
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusOnWriteResponseWriter) Write(p []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(w.status)
+	}
+	return w.ResponseWriter.Write(p)
 }
 
 func NewLeadStore(path string) (*LeadStore, error) {
