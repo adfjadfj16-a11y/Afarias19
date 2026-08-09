@@ -77,7 +77,7 @@ func TestSignupFormReturnsHTMLConfirmation(t *testing.T) {
 	}
 
 	form := "name=Ana&email=ana%40example.com&company=Acme&goal=mejorar+soporte"
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(form))
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 
