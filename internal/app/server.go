@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/mail"
 	"net/netip"
@@ -27,6 +28,12 @@ const (
 	minMonthlyPriceUSD = 1.0
 	maxBodyBytes       = 1 << 20
 	rateLimitMax       = 20
+	adminRateLimitMax  = 5
+	maxNameLength      = 120
+	maxEmailLength     = 254
+	maxCompanyLength   = 160
+	maxGoalLength      = 1000
+	maxMessageLength   = 2000
 )
 
 var voluntaryPaymentMethods = []string{"transferencia", "tarjeta", "paypal"}
@@ -65,12 +72,13 @@ type Config struct {
 }
 
 type Server struct {
-	mux         *http.ServeMux
-	store       *LeadStore
-	adminToken  string
-	landingPage []byte
-	limiter     *RateLimiter
-	now         func() time.Time
+	mux          *http.ServeMux
+	store        *LeadStore
+	adminToken   string
+	landingPage  []byte
+	limiter      *RateLimiter
+	adminLimiter *RateLimiter
+	now          func() time.Time
 }
 
 type Lead struct {
@@ -139,12 +147,13 @@ func NewServer(cfg Config) (*Server, error) {
 	}
 
 	s := &Server{
-		mux:         http.NewServeMux(),
-		store:       store,
-		adminToken:  cfg.AdminToken,
-		landingPage: page,
-		limiter:     cfg.RateLimiter,
-		now:         time.Now,
+		mux:          http.NewServeMux(),
+		store:        store,
+		adminToken:   cfg.AdminToken,
+		landingPage:  page,
+		limiter:      cfg.RateLimiter,
+		adminLimiter: NewRateLimiter(adminRateLimitMax, time.Minute),
+		now:          time.Now,
 	}
 	if s.limiter == nil {
 		s.limiter = NewRateLimiter(rateLimitMax, time.Minute)
@@ -174,6 +183,10 @@ func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSignupForm(w http.ResponseWriter, r *http.Request) {
+	if !hasContentType(r, "application/x-www-form-urlencoded") {
+		http.Error(w, "content-type inválido", http.StatusUnsupportedMediaType)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "formulario inválido", http.StatusBadRequest)
@@ -218,11 +231,15 @@ func (s *Server) handlePlans(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleCreateLead(w http.ResponseWriter, r *http.Request) {
+	if !hasContentType(r, "application/json") {
+		http.Error(w, "content-type inválido", http.StatusUnsupportedMediaType)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	defer r.Body.Close()
 
 	var input leadInput
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeJSON(r.Body, &input); err != nil {
 		http.Error(w, "JSON inválido", http.StatusBadRequest)
 		return
 	}
@@ -237,11 +254,15 @@ func (s *Server) handleCreateLead(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
+	if !hasContentType(r, "application/json") {
+		http.Error(w, "content-type inválido", http.StatusUnsupportedMediaType)
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	defer r.Body.Close()
 
 	var input assistantRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeJSON(r.Body, &input); err != nil {
 		http.Error(w, "JSON inválido", http.StatusBadRequest)
 		return
 	}
@@ -249,6 +270,10 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 	input.Message = strings.TrimSpace(input.Message)
 	if input.Message == "" {
 		http.Error(w, "el mensaje es obligatorio", http.StatusBadRequest)
+		return
+	}
+	if len(input.Message) > maxMessageLength {
+		http.Error(w, "el mensaje es demasiado largo", http.StatusBadRequest)
 		return
 	}
 
@@ -259,11 +284,19 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminLeads(w http.ResponseWriter, r *http.Request) {
+	clientAddr := clientIP(r)
+	if !s.adminLimiter.Allow(clientAddr, s.now()) {
+		logSecurityEvent(r, "admin_rate_limited")
+		http.Error(w, "demasiadas solicitudes, intenta de nuevo más tarde", http.StatusTooManyRequests)
+		return
+	}
 	if s.adminToken == "" || !secureTokenMatch(r.Header.Get("X-Admin-Token"), s.adminToken) {
+		logSecurityEvent(r, "admin_auth_failed")
 		http.Error(w, "no autorizado", http.StatusUnauthorized)
 		return
 	}
 
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{
 		"count": s.store.Count(),
 		"leads": s.store.List(),
@@ -280,11 +313,23 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 	if name == "" {
 		return Lead{}, errors.New("el nombre es obligatorio")
 	}
+	if len(name) > maxNameLength {
+		return Lead{}, errors.New("el nombre es demasiado largo")
+	}
 	if company == "" {
 		return Lead{}, errors.New("la empresa es obligatoria")
 	}
+	if len(company) > maxCompanyLength {
+		return Lead{}, errors.New("la empresa es demasiado larga")
+	}
 	if goal == "" {
 		return Lead{}, errors.New("el objetivo es obligatorio")
+	}
+	if len(goal) > maxGoalLength {
+		return Lead{}, errors.New("el objetivo es demasiado largo")
+	}
+	if len(email) > maxEmailLength {
+		return Lead{}, errors.New("el correo es demasiado largo")
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
 		return Lead{}, errors.New("el correo no es válido")
@@ -338,6 +383,30 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func decodeJSON(r io.Reader, dst any) error {
+	decoder := json.NewDecoder(r)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	if decoder.More() {
+		return errors.New("unexpected trailing data")
+	}
+	return nil
+}
+
+func hasContentType(r *http.Request, expected string) bool {
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	return mediaType == expected
 }
 
 func buildAssistantReply(message, msgContext string) string {
@@ -559,7 +628,14 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline' 'self'; form-action 'self'; base-uri 'self'")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline' 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func logSecurityEvent(r *http.Request, event string) {
+	log.Printf("security event=%s method=%s path=%s remote_ip=%s user_agent=%q", event, r.Method, r.URL.Path, clientIP(r), r.UserAgent())
 }

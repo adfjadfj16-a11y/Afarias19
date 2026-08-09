@@ -42,12 +42,14 @@ Afarias19 se posiciona como una propuesta propia con:
 ## 5. Seguridad implementada desde el inicio
 
 - validación de correo y campos obligatorios
+- validación estricta de `Content-Type` y rechazo de campos JSON desconocidos
 - límites de tamaño de cuerpo HTTP
 - headers defensivos (`CSP`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`)
 - control administrativo mediante token
 - comparación segura de token usando hash + comparación constante
 - escritura atómica para persistencia
 - limitación simple por IP para reducir abuso
+- limitación específica para intentos reiterados sobre el endpoint administrativo
 
 ## 6. Uso de IA en el MVP
 

@@ -13,7 +13,7 @@ Afarias19 ahora incluye un MVP de **software SaaS de atención con IA** pensado 
 - **30 días gratis** y pago flexible desde **USD 1** a partir del segundo mes
 - **Asistente de IA local** para respuestas iniciales sin depender de servicios externos
 - **Persistencia segura** de prospectos en JSON con escritura atómica
-- **Seguridad básica desde el inicio**: validación de entradas, límites de tamaño, headers defensivos y token para endpoint administrativo
+- **Seguridad básica desde el inicio**: validación estricta de entradas, límites de tamaño, headers defensivos, rate limiting y token para endpoint administrativo
 
 Más detalle en `docs/product_blueprint.md`.
 
@@ -41,6 +41,8 @@ Más detalle en `docs/product_blueprint.md`.
 ## Nota de despliegue
 
 El limitador de solicitudes del MVP usa `RemoteAddr` directamente. Si más adelante se despliega detrás de un proxy o balanceador, conviene añadir una lista explícita de proxies confiables antes de aceptar headers reenviados.
+
+El backend rechaza `Content-Type` inválidos y JSON con campos desconocidos en los endpoints JSON para reducir superficie de ataque y errores de integración.
 
 ## Ejecutar localmente
 

@@ -124,6 +124,24 @@ func TestCreateLeadStoresVoluntaryPaymentMethod(t *testing.T) {
 	}
 }
 
+func TestCreateLeadOmitsVoluntaryPaymentMethodWhenMissing(t *testing.T) {
+	server := newTestServer(t)
+
+	body := bytes.NewBufferString(`{"name":"Ana","email":"ana@example.com","company":"Acme","goal":"mejorar soporte"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/leads", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
+	}
+	if strings.Contains(rec.Body.String(), `"paymentMethod"`) {
+		t.Fatalf("body should omit paymentMethod when missing, got %q", rec.Body.String())
+	}
+}
+
 func TestCreateLeadRejectsUnknownPaymentMethod(t *testing.T) {
 	server := newTestServer(t)
 
@@ -149,6 +167,23 @@ func TestAdminLeadsRequiresToken(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAdminLeadsSetsNoStoreCacheControl(t *testing.T) {
+	server := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/leads", nil)
+	req.Header.Set("X-Admin-Token", "secret-token")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache-control = %q, want no-store", got)
 	}
 }
 
@@ -217,6 +252,51 @@ func TestPlansExposeFlexiblePricing(t *testing.T) {
 	}
 	if len(methods) != 3 {
 		t.Fatalf("paymentMethods len = %d, want 3", len(methods))
+	}
+}
+
+func TestCreateLeadRejectsUnknownJSONFields(t *testing.T) {
+	server := newTestServer(t)
+
+	body := bytes.NewBufferString(`{"name":"Ana","email":"ana@example.com","company":"Acme","goal":"mejorar soporte","extra":"x"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/leads", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateLeadRejectsInvalidContentType(t *testing.T) {
+	server := newTestServer(t)
+
+	body := bytes.NewBufferString(`{"name":"Ana","email":"ana@example.com","company":"Acme","goal":"mejorar soporte"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/leads", body)
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnsupportedMediaType)
+	}
+}
+
+func TestAssistantRejectsOversizedMessage(t *testing.T) {
+	server := newTestServer(t)
+
+	body := bytes.NewBufferString(`{"message":"` + strings.Repeat("a", maxMessageLength+1) + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/assistant", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
 
