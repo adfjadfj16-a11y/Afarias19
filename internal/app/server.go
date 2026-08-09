@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
 	"encoding/hex"
@@ -12,6 +13,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/mail"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +25,7 @@ const (
 	freeTrialDays = 30
 	paidMonthly   = 19.99
 	maxBodyBytes  = 1 << 20
+	rateLimitMax  = 20
 )
 
 //go:embed index.html
@@ -38,6 +41,7 @@ type Server struct {
 	store       *LeadStore
 	adminToken  string
 	landingPage []byte
+	limiter     *RateLimiter
 	now         func() time.Time
 }
 
@@ -75,6 +79,18 @@ type LeadStore struct {
 	leads []Lead
 }
 
+type RateLimiter struct {
+	mu      sync.Mutex
+	entries map[string]rateEntry
+	limit   int
+	window  time.Duration
+}
+
+type rateEntry struct {
+	count       int
+	windowStart time.Time
+}
+
 func NewServer(cfg Config) (*Server, error) {
 	page, err := webFS.ReadFile("index.html")
 	if err != nil {
@@ -91,6 +107,7 @@ func NewServer(cfg Config) (*Server, error) {
 		store:       store,
 		adminToken:  cfg.AdminToken,
 		landingPage: page,
+		limiter:     NewRateLimiter(rateLimitMax, time.Minute),
 		now:         time.Now,
 	}
 	s.routes()
@@ -103,11 +120,11 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /", s.handleLanding)
-	s.mux.HandleFunc("POST /signup", s.handleSignupForm)
+	s.mux.Handle("POST /signup", s.limitByIP(http.HandlerFunc(s.handleSignupForm)))
 	s.mux.HandleFunc("GET /api/healthz", s.handleHealth)
 	s.mux.HandleFunc("GET /api/plans", s.handlePlans)
-	s.mux.HandleFunc("POST /api/leads", s.handleCreateLead)
-	s.mux.HandleFunc("POST /api/assistant", s.handleAssistant)
+	s.mux.Handle("POST /api/leads", s.limitByIP(http.HandlerFunc(s.handleCreateLead)))
+	s.mux.Handle("POST /api/assistant", s.limitByIP(http.HandlerFunc(s.handleAssistant)))
 	s.mux.HandleFunc("GET /api/admin/leads", s.handleAdminLeads)
 }
 
@@ -135,9 +152,15 @@ func (s *Server) handleSignupForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	page, err := renderThankYouPage(lead.TrialEndsAt)
+	if err != nil {
+		http.Error(w, "no se pudo generar la confirmación", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
-	_, _ = w.Write([]byte(renderThankYouPage(lead.TrialEndsAt)))
+	_, _ = w.Write([]byte(page))
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -201,7 +224,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminLeads(w http.ResponseWriter, r *http.Request) {
-	if s.adminToken == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(s.adminToken)) != 1 {
+	if s.adminToken == "" || !secureTokenMatch(r.Header.Get("X-Admin-Token"), s.adminToken) {
 		http.Error(w, "no autorizado", http.StatusUnauthorized)
 		return
 	}
@@ -253,6 +276,16 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 	return lead, nil
 }
 
+func (s *Server) limitByIP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.limiter.Allow(clientIP(r), s.now()) {
+			http.Error(w, "demasiadas solicitudes, intenta de nuevo más tarde", http.StatusTooManyRequests)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func newLeadID() (string, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -267,9 +300,9 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func buildAssistantReply(message, context string) string {
+func buildAssistantReply(message, msgContext string) string {
 	lowerMessage := strings.ToLower(message)
-	lowerContext := strings.ToLower(context)
+	lowerContext := strings.ToLower(msgContext)
 
 	switch {
 	case strings.Contains(lowerMessage, "precio") || strings.Contains(lowerMessage, "plan"):
@@ -300,7 +333,7 @@ func suggestActions(message string) []string {
 	return actions
 }
 
-func renderThankYouPage(trialEndsAt time.Time) string {
+func renderThankYouPage(trialEndsAt time.Time) (string, error) {
 	const tpl = `
 <!doctype html>
 <html lang="es">
@@ -325,8 +358,10 @@ func renderThankYouPage(trialEndsAt time.Time) string {
 </html>`
 
 	var out bytes.Buffer
-	_ = template.Must(template.New("thanks").Parse(tpl)).Execute(&out, trialEndsAt.Format("2006-01-02"))
-	return out.String()
+	if err := template.Must(template.New("thanks").Parse(tpl)).Execute(&out, trialEndsAt.Format("2006-01-02")); err != nil {
+		return "", fmt.Errorf("render thank-you page: %w", err)
+	}
+	return out.String(), nil
 }
 
 func NewLeadStore(path string) (*LeadStore, error) {
@@ -339,6 +374,36 @@ func NewLeadStore(path string) (*LeadStore, error) {
 		return nil, err
 	}
 	return store, nil
+}
+
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	return &RateLimiter{
+		entries: make(map[string]rateEntry),
+		limit:   limit,
+		window:  window,
+	}
+}
+
+func (rl *RateLimiter) Allow(key string, now time.Time) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	entry, ok := rl.entries[key]
+	if !ok || now.Sub(entry.windowStart) >= rl.window {
+		rl.entries[key] = rateEntry{
+			count:       1,
+			windowStart: now,
+		}
+		return true
+	}
+
+	if entry.count >= rl.limit {
+		return false
+	}
+
+	entry.count++
+	rl.entries[key] = entry
+	return true
 }
 
 func (s *LeadStore) Add(lead Lead) error {
@@ -382,6 +447,32 @@ func (s *LeadStore) load() error {
 		return fmt.Errorf("decode leads: %w", err)
 	}
 	return nil
+}
+
+func secureTokenMatch(provided, expected string) bool {
+	providedHash := sha256.Sum256([]byte(provided))
+	expectedHash := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(providedHash[:], expectedHash[:]) == 1
+}
+
+func clientIP(r *http.Request) string {
+	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-For"), ",")[0]); forwarded != "" {
+		return forwarded
+	}
+
+	host := r.RemoteAddr
+	if addr, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return addr.Addr().String()
+	}
+	if strings.Contains(host, ":") {
+		if idx := strings.LastIndex(host, ":"); idx > 0 {
+			return host[:idx]
+		}
+	}
+	if host == "" {
+		return "unknown"
+	}
+	return host
 }
 
 func (s *LeadStore) persist() error {

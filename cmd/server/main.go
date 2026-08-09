@@ -27,6 +27,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if os.Getenv("ADMIN_TOKEN") == "" {
+		log.Print("ADMIN_TOKEN no está configurado; /api/admin/leads permanecerá inaccesible hasta definirlo")
+	}
 
 	httpServer := &http.Server{
 		Addr:              ":" + port,

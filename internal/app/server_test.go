@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func newTestServer(t *testing.T) *Server {
@@ -88,5 +89,32 @@ func TestAssistant(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestRateLimitByIP(t *testing.T) {
+	server := newTestServer(t)
+	server.limiter = NewRateLimiter(1, time.Minute)
+
+	body1 := bytes.NewBufferString(`{"message":"precio"}`)
+	req1 := httptest.NewRequest(http.MethodPost, "/api/assistant", body1)
+	req1.Header.Set("Content-Type", "application/json")
+	req1.RemoteAddr = "203.0.113.10:1234"
+	rec1 := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec1, req1)
+
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("first status = %d, want %d", rec1.Code, http.StatusOK)
+	}
+
+	body2 := bytes.NewBufferString(`{"message":"precio"}`)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/assistant", body2)
+	req2.Header.Set("Content-Type", "application/json")
+	req2.RemoteAddr = "203.0.113.10:5678"
+	rec2 := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
 	}
 }

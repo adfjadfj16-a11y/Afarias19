@@ -15,6 +15,8 @@ Afarias19 ahora incluye un MVP de **software SaaS de atención con IA** pensado 
 - **Persistencia segura** de prospectos en JSON con escritura atómica
 - **Seguridad básica desde el inicio**: validación de entradas, límites de tamaño, headers defensivos y token para endpoint administrativo
 
+Más detalle en `docs/product_blueprint.md`.
+
 ## Arquitectura
 
 - `cmd/server`: arranque del servidor HTTP
