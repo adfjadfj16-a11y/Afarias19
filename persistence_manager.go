@@ -134,29 +134,30 @@ func (pm *PersistenceManager) LimpiarTodo() error {
 // La compresión gzip reduce el tamaño del archivo considerablemente, especialmente con
 // muchas entradas o valores de texto largos.
 func (pm *PersistenceManager) persistir() error {
-	// Convertimos el mapa a JSON compacto (sin sangría: el archivo ya va comprimido)
-	contenidoJSON, err := json.Marshal(pm.datos)
-	if err != nil {
-		return err
-	}
-
-	// Comprimimos el JSON usando gzip en memoria
-	var buf bytes.Buffer
-	gz, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
-	if err != nil {
-		return err
-	}
-	if _, err := gz.Write(contenidoJSON); err != nil {
-		return err
-	}
-	if err := gz.Close(); err != nil {
-		return err
-	}
-
 	// Escribimos primero en un archivo temporal (seguridad ante cortes de luz o cierres bruscos)
 	rutaTemporal := pm.rutaArchivo + ".tmp"
-	if err := os.WriteFile(rutaTemporal, buf.Bytes(), 0644); err != nil {
+	f, err := os.OpenFile(rutaTemporal, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
 		return err
+	}
+
+	// Comprimimos y codificamos el JSON directamente al archivo, sin pasar por memoria
+	gz, err := gzip.NewWriterLevel(f, gzip.BestCompression)
+	if err != nil {
+		f.Close()
+		return err
+	}
+	encErr := json.NewEncoder(gz).Encode(pm.datos)
+	closeGzErr := gz.Close()
+	closeFileErr := f.Close()
+	if encErr != nil {
+		return encErr
+	}
+	if closeGzErr != nil {
+		return closeGzErr
+	}
+	if closeFileErr != nil {
+		return closeFileErr
 	}
 
 	// Renombramos el temporal al archivo definitivo (operación atómica en la mayoría de sistemas)
