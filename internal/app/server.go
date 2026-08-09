@@ -74,15 +74,15 @@ type Server struct {
 }
 
 type Lead struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Email       string    `json:"email"`
-	Company     string    `json:"company"`
-	Goal        string    `json:"goal"`
-	Plan        string    `json:"plan"`
-	PaymentMethod string  `json:"paymentMethod"`
-	CreatedAt   time.Time `json:"createdAt"`
-	TrialEndsAt time.Time `json:"trialEndsAt"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Email         string    `json:"email"`
+	Company       string    `json:"company"`
+	Goal          string    `json:"goal"`
+	Plan          string    `json:"plan"`
+	PaymentMethod string    `json:"paymentMethod"`
+	CreatedAt     time.Time `json:"createdAt"`
+	TrialEndsAt   time.Time `json:"trialEndsAt"`
 }
 
 type leadInput struct {
@@ -302,15 +302,15 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 		return Lead{}, err
 	}
 	lead := Lead{
-		ID:          id,
-		Name:        name,
-		Email:       email,
-		Company:     company,
-		Goal:        goal,
-		Plan:        "trial",
+		ID:            id,
+		Name:          name,
+		Email:         email,
+		Company:       company,
+		Goal:          goal,
+		Plan:          "trial",
 		PaymentMethod: paymentMethod,
-		CreatedAt:   now,
-		TrialEndsAt: now.Add(freeTrialDays * 24 * time.Hour),
+		CreatedAt:     now,
+		TrialEndsAt:   now.Add(freeTrialDays * 24 * time.Hour),
 	}
 
 	if err := s.store.Add(lead); err != nil {
