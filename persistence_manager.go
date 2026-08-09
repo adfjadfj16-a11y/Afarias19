@@ -173,8 +173,14 @@ func (pm *PersistenceManager) cargar() error {
 		return err // puede ser os.ErrNotExist si el archivo no existe
 	}
 
-	// Intentamos descomprimir con gzip; si falla, asumimos JSON plano (compatibilidad)
+	// Intentamos descomprimir con gzip.
+	// Solo si el encabezado no es gzip (ErrHeader) caemos al JSON plano,
+	// para mantener compatibilidad con archivos anteriores a la compresión.
+	// Cualquier otro error se devuelve directamente.
 	gr, err := gzip.NewReader(bytes.NewReader(contenido))
+	if err != nil && !errors.Is(err, gzip.ErrHeader) {
+		return err
+	}
 	if err == nil {
 		defer gr.Close()
 		descomprimido, err := io.ReadAll(gr)
