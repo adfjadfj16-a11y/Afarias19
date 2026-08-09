@@ -2,7 +2,10 @@ package app
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -198,7 +201,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminLeads(w http.ResponseWriter, r *http.Request) {
-	if s.adminToken == "" || r.Header.Get("X-Admin-Token") != s.adminToken {
+	if s.adminToken == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Admin-Token")), []byte(s.adminToken)) != 1 {
 		http.Error(w, "no autorizado", http.StatusUnauthorized)
 		return
 	}
@@ -229,8 +232,12 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 	}
 
 	now := s.now().UTC()
+	id, err := newLeadID()
+	if err != nil {
+		return Lead{}, err
+	}
 	lead := Lead{
-		ID:          fmt.Sprintf("lead-%d", now.UnixNano()),
+		ID:          id,
 		Name:        name,
 		Email:       email,
 		Company:     company,
@@ -244,6 +251,14 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 		return Lead{}, err
 	}
 	return lead, nil
+}
+
+func newLeadID() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("generar id: %w", err)
+	}
+	return "lead-" + hex.EncodeToString(raw[:]), nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

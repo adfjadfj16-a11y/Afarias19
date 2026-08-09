@@ -39,7 +39,7 @@ Afarias19 ahora incluye un MVP de **software SaaS de atención con IA** pensado 
 ## Ejecutar localmente
 
 ```bash
-cd /home/runner/work/Afarias19/Afarias19
+cd <project-root>
 go run ./cmd/server
 ```
 
@@ -48,7 +48,7 @@ Abrir `http://localhost:8080`.
 ## Probar
 
 ```bash
-cd /home/runner/work/Afarias19/Afarias19
+cd <project-root>
 go test ./...
 go build ./...
 ```
