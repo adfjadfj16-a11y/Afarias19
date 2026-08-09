@@ -32,8 +32,9 @@ const (
 var webFS embed.FS
 
 type Config struct {
-	DataFile   string
-	AdminToken string
+	DataFile    string
+	AdminToken  string
+	RateLimiter *RateLimiter
 }
 
 type Server struct {
@@ -107,8 +108,11 @@ func NewServer(cfg Config) (*Server, error) {
 		store:       store,
 		adminToken:  cfg.AdminToken,
 		landingPage: page,
-		limiter:     NewRateLimiter(rateLimitMax, time.Minute),
+		limiter:     cfg.RateLimiter,
 		now:         time.Now,
+	}
+	if s.limiter == nil {
+		s.limiter = NewRateLimiter(rateLimitMax, time.Minute)
 	}
 	s.routes()
 	return s, nil
@@ -302,7 +306,6 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 
 func buildAssistantReply(message, msgContext string) string {
 	lowerMessage := strings.ToLower(message)
-	lowerContext := strings.ToLower(msgContext)
 
 	switch {
 	case strings.Contains(lowerMessage, "precio") || strings.Contains(lowerMessage, "plan"):
@@ -311,7 +314,7 @@ func buildAssistantReply(message, msgContext string) string {
 		return "La propuesta prioriza validación de entradas, control de acceso administrativo, almacenamiento atómico y reducción de exposición de datos."
 	case strings.Contains(lowerMessage, "ia") || strings.Contains(lowerMessage, "automat"):
 		return "La IA del MVP ayuda a responder preguntas frecuentes y a orientar el siguiente paso sin depender todavía de proveedores externos."
-	case strings.Contains(lowerContext, "ventas"):
+	case strings.Contains(strings.ToLower(msgContext), "ventas"):
 		return "Para ventas conviene captar el prospecto, entender su objetivo y ofrecer una demo rápida durante el período gratuito."
 	default:
 		return "Podemos ayudarte a captar prospectos, responder preguntas frecuentes y convertir el primer mes gratis en una experiencia clara y segura."

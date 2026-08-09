@@ -12,11 +12,16 @@ import (
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
-
-	server, err := NewServer(Config{
+	return newTestServerWithConfig(t, Config{
 		DataFile:   filepath.Join(t.TempDir(), "leads.json"),
 		AdminToken: "secret-token",
 	})
+}
+
+func newTestServerWithConfig(t *testing.T, cfg Config) *Server {
+	t.Helper()
+
+	server, err := NewServer(cfg)
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -93,8 +98,11 @@ func TestAssistant(t *testing.T) {
 }
 
 func TestRateLimitByIP(t *testing.T) {
-	server := newTestServer(t)
-	server.limiter = NewRateLimiter(1, time.Minute)
+	server := newTestServerWithConfig(t, Config{
+		DataFile:    filepath.Join(t.TempDir(), "leads.json"),
+		AdminToken:  "secret-token",
+		RateLimiter: NewRateLimiter(1, time.Minute),
+	})
 
 	body1 := bytes.NewBufferString(`{"message":"precio"}`)
 	req1 := httptest.NewRequest(http.MethodPost, "/api/assistant", body1)

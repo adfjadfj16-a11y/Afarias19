@@ -38,6 +38,10 @@ Más detalle en `docs/product_blueprint.md`.
 - `DATA_FILE`: ruta del archivo de almacenamiento (por defecto `data/leads.json`)
 - `ADMIN_TOKEN`: token requerido para `GET /api/admin/leads`
 
+## Nota de despliegue
+
+El limitador de solicitudes del MVP usa `RemoteAddr` directamente. Si más adelante se despliega detrás de un proxy o balanceador, conviene añadir una lista explícita de proxies confiables antes de aceptar headers reenviados.
+
 ## Ejecutar localmente
 
 ```bash
