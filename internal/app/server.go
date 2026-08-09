@@ -174,7 +174,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/plans", s.handlePlans)
 	s.mux.Handle("POST /api/leads", s.limitByIP(http.HandlerFunc(s.handleCreateLead)))
 	s.mux.Handle("POST /api/assistant", s.limitByIP(http.HandlerFunc(s.handleAssistant)))
-	s.mux.Handle("GET /api/admin/leads", s.limitByIP(http.HandlerFunc(s.handleAdminLeads)))
+	s.mux.Handle("GET /api/admin/leads", s.limitRequests(http.HandlerFunc(s.handleAdminLeads), s.adminLimiter, "admin_rate_limited"))
 }
 
 func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
@@ -285,12 +285,6 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminLeads(w http.ResponseWriter, r *http.Request) {
-	clientAddr := clientIP(r)
-	if !s.adminLimiter.Allow(clientAddr, s.now()) {
-		logSecurityEvent(r, "admin_rate_limited")
-		http.Error(w, "demasiadas solicitudes, intenta de nuevo más tarde", http.StatusTooManyRequests)
-		return
-	}
 	providedToken := r.Header.Get("X-Admin-Token")
 	if s.adminToken == "" || providedToken == "" || !secureTokenMatch(providedToken, s.adminToken) {
 		logSecurityEvent(r, "admin_auth_failed")
@@ -364,8 +358,13 @@ func (s *Server) createLead(input leadInput) (Lead, error) {
 }
 
 func (s *Server) limitByIP(next http.Handler) http.Handler {
+	return s.limitRequests(next, s.limiter, "rate_limited")
+}
+
+func (s *Server) limitRequests(next http.Handler, limiter *RateLimiter, event string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.limiter.Allow(clientIP(r), s.now()) {
+		if !limiter.Allow(clientIP(r), s.now()) {
+			logSecurityEvent(r, event)
 			http.Error(w, "demasiadas solicitudes, intenta de nuevo más tarde", http.StatusTooManyRequests)
 			return
 		}
