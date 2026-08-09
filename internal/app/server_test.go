@@ -364,3 +364,12 @@ func TestRateLimitByIP(t *testing.T) {
 		t.Fatalf("second status = %d, want %d", rec2.Code, http.StatusTooManyRequests)
 	}
 }
+
+func TestClientIPPreservesIPv6WithoutPort(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "::1"
+
+	if got := clientIP(req); got != "::1" {
+		t.Fatalf("clientIP = %q, want %q", got, "::1")
+	}
+}

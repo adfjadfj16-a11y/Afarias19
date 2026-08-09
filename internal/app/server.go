@@ -174,7 +174,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/plans", s.handlePlans)
 	s.mux.Handle("POST /api/leads", s.limitByIP(http.HandlerFunc(s.handleCreateLead)))
 	s.mux.Handle("POST /api/assistant", s.limitByIP(http.HandlerFunc(s.handleAssistant)))
-	s.mux.HandleFunc("GET /api/admin/leads", s.handleAdminLeads)
+	s.mux.Handle("GET /api/admin/leads", s.limitByIP(http.HandlerFunc(s.handleAdminLeads)))
 }
 
 func (s *Server) handleLanding(w http.ResponseWriter, r *http.Request) {
@@ -594,6 +594,9 @@ func clientIP(r *http.Request) string {
 	host := r.RemoteAddr
 	if addr, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
 		return addr.Addr().String()
+	}
+	if addr, err := netip.ParseAddr(r.RemoteAddr); err == nil {
+		return addr.String()
 	}
 	if strings.Contains(host, ":") {
 		if idx := strings.LastIndex(host, ":"); idx > 0 {
