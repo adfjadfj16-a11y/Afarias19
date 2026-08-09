@@ -291,7 +291,8 @@ func (s *Server) handleAdminLeads(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "demasiadas solicitudes, intenta de nuevo más tarde", http.StatusTooManyRequests)
 		return
 	}
-	if s.adminToken == "" || !secureTokenMatch(r.Header.Get("X-Admin-Token"), s.adminToken) {
+	providedToken := r.Header.Get("X-Admin-Token")
+	if s.adminToken == "" || providedToken == "" || !secureTokenMatch(providedToken, s.adminToken) {
 		logSecurityEvent(r, "admin_auth_failed")
 		http.Error(w, "no autorizado", http.StatusUnauthorized)
 		return
@@ -412,6 +413,7 @@ func hasContentType(r *http.Request, expected string) bool {
 
 func buildAssistantReply(message, msgContext string) string {
 	lowerMessage := strings.ToLower(message)
+	lowerContext := strings.ToLower(msgContext)
 
 	switch {
 	case strings.Contains(lowerMessage, "precio") || strings.Contains(lowerMessage, "plan"):
@@ -422,7 +424,7 @@ func buildAssistantReply(message, msgContext string) string {
 		return "La propuesta prioriza validación de entradas, control de acceso administrativo, almacenamiento atómico y reducción de exposición de datos."
 	case strings.Contains(lowerMessage, "ia") || strings.Contains(lowerMessage, "automat"):
 		return "La IA del MVP ayuda a responder preguntas frecuentes y a orientar el siguiente paso sin depender todavía de proveedores externos."
-	case strings.Contains(strings.ToLower(msgContext), "ventas"):
+	case strings.Contains(lowerContext, "ventas"):
 		return "Para ventas conviene captar el prospecto, entender su objetivo y ofrecer una demo rápida durante el período gratuito."
 	default:
 		return "Podemos ayudarte a captar prospectos, responder preguntas frecuentes y convertir el primer mes gratis en una experiencia clara y segura."
