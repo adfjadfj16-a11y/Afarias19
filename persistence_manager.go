@@ -3,9 +3,12 @@
 package main
 
 import (
+	"bytes"         // nos permite trabajar con buffers de bytes en memoria
+	"compress/gzip" // nos permite comprimir y descomprimir datos en formato gzip
 	"encoding/json" // nos permite convertir datos Go a formato JSON y viceversa
 	"errors"        // nos permite crear mensajes de error personalizados
 	"fmt"           // nos permite imprimir mensajes con formato en pantalla
+	"io"            // nos permite leer y escribir flujos de datos
 	"log"           // nos permite registrar errores graves y detener el programa de forma segura
 	"os"            // nos permite leer y escribir archivos en el sistema
 	"sync"          // nos permite proteger los datos cuando hay acceso simultáneo
@@ -126,19 +129,33 @@ func (pm *PersistenceManager) LimpiarTodo() error {
 	return pm.persistir()
 }
 
-// persistir escribe el contenido del mapa en el archivo JSON.
+// persistir escribe el contenido del mapa en el archivo como JSON comprimido con gzip.
 // Usa escritura atómica: primero escribe en un archivo temporal y luego lo renombra.
-// Esto evita que el archivo quede corrupto si el programa se cierra a mitad de escritura.
+// La compresión gzip reduce el tamaño del archivo considerablemente, especialmente con
+// muchas entradas o valores de texto largos.
 func (pm *PersistenceManager) persistir() error {
-	// Convertimos el mapa a formato JSON con sangría (más fácil de leer)
-	contenido, err := json.MarshalIndent(pm.datos, "", "  ")
+	// Convertimos el mapa a JSON compacto (sin sangría: el archivo ya va comprimido)
+	contenidoJSON, err := json.Marshal(pm.datos)
 	if err != nil {
+		return err
+	}
+
+	// Comprimimos el JSON usando gzip en memoria
+	var buf bytes.Buffer
+	gz, err := gzip.NewWriterLevel(&buf, gzip.BestCompression)
+	if err != nil {
+		return err
+	}
+	if _, err := gz.Write(contenidoJSON); err != nil {
+		return err
+	}
+	if err := gz.Close(); err != nil {
 		return err
 	}
 
 	// Escribimos primero en un archivo temporal (seguridad ante cortes de luz o cierres bruscos)
 	rutaTemporal := pm.rutaArchivo + ".tmp"
-	if err := os.WriteFile(rutaTemporal, contenido, 0644); err != nil {
+	if err := os.WriteFile(rutaTemporal, buf.Bytes(), 0644); err != nil {
 		return err
 	}
 
@@ -146,13 +163,25 @@ func (pm *PersistenceManager) persistir() error {
 	return os.Rename(rutaTemporal, pm.rutaArchivo)
 }
 
-// cargar lee el archivo JSON y carga los datos en memoria.
-// Si el archivo no existe, simplemente no hace nada (empezamos desde cero).
+// cargar lee el archivo y carga los datos en memoria.
+// Detecta automáticamente si el archivo está comprimido con gzip o es JSON plano,
+// para mantener compatibilidad con archivos creados antes de añadir compresión.
 func (pm *PersistenceManager) cargar() error {
 	// Leemos todo el contenido del archivo
 	contenido, err := os.ReadFile(pm.rutaArchivo)
 	if err != nil {
 		return err // puede ser os.ErrNotExist si el archivo no existe
+	}
+
+	// Intentamos descomprimir con gzip; si falla, asumimos JSON plano (compatibilidad)
+	gr, err := gzip.NewReader(bytes.NewReader(contenido))
+	if err == nil {
+		defer gr.Close()
+		descomprimido, err := io.ReadAll(gr)
+		if err != nil {
+			return err
+		}
+		contenido = descomprimido
 	}
 
 	// Convertimos el JSON de vuelta a un mapa Go
