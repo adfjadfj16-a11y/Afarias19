@@ -609,6 +609,8 @@ func clientIP(r *http.Request) string {
 	if strings.Count(host, ":") == 1 {
 		if idx := strings.LastIndex(host, ":"); idx > 0 {
 			return host[:idx]
+		} else if idx == 0 {
+			return "unknown"
 		}
 	}
 	if host == "" {
