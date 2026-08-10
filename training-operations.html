@@ -1,30 +1,227 @@
 <!DOCTYPE html>
-<html lang="en">
-<head><!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
-(function() {
-  if (window.__playableTouchPatchInstalled) return;
-  window.__playableTouchPatchInstalled = true;
-  var origAdd = EventTarget.prototype.addEventListener;
-  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if (blockedTypes[type]) {
-      if (options === undefined || options === null) {
-        options = { passive: true };
-      } else if (typeof options === 'boolean') {
-        options = { capture: options, passive: true };
-      } else {
-        options = Object.assign({}, options, { passive: true });
-      }
-    }
-    return origAdd.call(this, type, listener, options);
-  };
-})();
-</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<html lang="es">
+<head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>React Artifact</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Base de Operaciones – Entrenamiento Empresarial</title>
+  <style>
+    :root {
+      --bg:#0b0f1a; --surface:#131929; --surface2:#1b2338;
+      --border:#1e2d4a; --accent:#3b82f6; --green:#10b981;
+      --red:#ef4444; --yellow:#f59e0b; --text:#e2e8f0; --muted:#64748b;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between}
+    .logo{display:flex;align-items:center;gap:10px}
+    .logo-icon{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:18px}
+    .logo-text{font-size:16px;font-weight:700;letter-spacing:-.02em}
+    .logo-sub{font-size:11px;color:var(--muted);margin-top:1px}
+    .header-right{display:flex;align-items:center;gap:16px}
+    #clock{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+    .pulse-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse-ring 1.5s ease-out infinite}
+    @keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(16,185,129,.6)}70%{box-shadow:0 0 0 8px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+    #next-update{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px}
+    main{padding:24px 28px;max-width:1280px;margin:0 auto}
+    .section-title{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+    .kpi-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px}
+    .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden}
+    .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0}
+    .kpi-card.blue::before{background:var(--accent)}.kpi-card.green::before{background:var(--green)}.kpi-card.gold::before{background:var(--yellow)}
+    .kpi-label{font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+    .kpi-value{font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1}
+    .kpi-value.blue{color:#60a5fa}.kpi-value.green{color:#34d399}.kpi-value.gold{color:#fbbf24}
+    .kpi-delta{font-size:12px;margin-top:6px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-weight:600}
+    .kpi-delta.up{background:rgba(16,185,129,.12);color:#34d399}.kpi-delta.down{background:rgba(239,68,68,.12);color:#f87171}.kpi-delta.flat{background:rgba(100,116,139,.12);color:var(--muted)}
+    .market-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:28px}
+    @media(max-width:900px){.market-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:540px){.market-grid{grid-template-columns:1fr}.kpi-strip{grid-template-columns:1fr}}
+    .metric-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .2s,transform .15s}
+    .metric-card:hover{border-color:var(--accent);transform:translateY(-2px)}
+    .metric-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .metric-name{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+    .metric-icon{font-size:16px}
+    .metric-value{font-size:22px;font-weight:800;letter-spacing:-.02em;margin-bottom:4px}
+    .metric-sub{font-size:11px;color:var(--muted);margin-bottom:10px}
+    .mini-bars{display:flex;align-items:flex-end;gap:3px;height:32px}
+    .mini-bar{flex:1;border-radius:3px 3px 0 0;background:var(--border);transition:height .5s ease,background .5s;min-height:4px}
+    .mini-bar.active{background:var(--accent)}.mini-bar.up{background:var(--green)}.mini-bar.down{background:var(--red)}
+    .trend{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px;margin-top:6px}
+    .trend.up{background:rgba(16,185,129,.12);color:#34d399}.trend.down{background:rgba(239,68,68,.12);color:#f87171}.trend.flat{background:rgba(100,116,139,.12);color:var(--muted)}
+    #timer-bar-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:8px;height:6px;width:100%;overflow:hidden;margin-bottom:28px}
+    #timer-bar{height:100%;border-radius:8px;background:linear-gradient(90deg,#3b82f6,#6366f1);transition:width .25s linear}
+    .log-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+    #log-list{list-style:none;max-height:180px;overflow-y:auto}
+    #log-list li{font-size:12px;color:var(--muted);padding:5px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+    #log-list li:last-child{border-bottom:none}
+    .log-ts{color:#475569;font-variant-numeric:tabular-nums;width:58px;flex-shrink:0}
+    .tag{font-size:10px;font-weight:700;letter-spacing:.05em;padding:1px 6px;border-radius:4px;text-transform:uppercase}
+    .tag.ok{background:rgba(16,185,129,.15);color:#34d399}.tag.warn{background:rgba(245,158,11,.15);color:#fbbf24}.tag.info{background:rgba(59,130,246,.15);color:#60a5fa}
+    #log-list::-webkit-scrollbar{width:4px}#log-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  </style>
 </head>
 <body>
-  <div id="root"></div>
+<header>
+  <div class="logo">
+    <div class="logo-icon">📡</div>
+    <div>
+      <div class="logo-text">Base de Operaciones</div>
+      <div class="logo-sub">Entrenamiento Empresarial · Relatividad de Mercado</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="pulse-dot"></div>
+    <span id="clock">--:--:--</span>
+    <span id="next-update">Próxima actualización: 10s</span>
+  </div>
+</header>
+<main>
+  <p class="section-title">Indicadores Clave de Rendimiento</p>
+  <div class="kpi-strip">
+    <div class="kpi-card blue">
+      <div class="kpi-label">Índice de Competitividad</div>
+      <div class="kpi-value blue" id="kpi-1">–</div>
+      <div class="kpi-delta flat" id="kpi-1-d">–</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Rendimiento Global</div>
+      <div class="kpi-value green" id="kpi-2">–</div>
+      <div class="kpi-delta flat" id="kpi-2-d">–</div>
+    </div>
+    <div class="kpi-card gold">
+      <div class="kpi-label">Eficiencia Operativa</div>
+      <div class="kpi-value gold" id="kpi-3">–</div>
+      <div class="kpi-delta flat" id="kpi-3-d">–</div>
+    </div>
+  </div>
+  <div id="timer-bar-wrap"><div id="timer-bar" style="width:100%"></div></div>
+  <p class="section-title">Relatividad de Mercado — 10 Dimensiones</p>
+  <div class="market-grid" id="market-grid"></div>
+  <div class="log-wrap">
+    <p class="section-title" style="margin-bottom:10px">Registro de Actividad</p>
+    <ul id="log-list"></ul>
+  </div>
+</main>
+<script>
+const METRICS=[
+  {id:'m1',name:'Demanda',     icon:'📈',unit:'%',  min:40,max:99, desc:'Nivel de demanda activa'},
+  {id:'m2',name:'Oferta',      icon:'📦',unit:'%',  min:30,max:95, desc:'Capacidad de oferta'},
+  {id:'m3',name:'Precio',      icon:'💰',unit:'pts',min:80,max:999,desc:'Índice de precio relativo'},
+  {id:'m4',name:'Competencia', icon:'⚔️', unit:'%',  min:20,max:90, desc:'Presión competitiva'},
+  {id:'m5',name:'Innovación',  icon:'🚀',unit:'pts',min:10,max:100,desc:'Velocidad de innovación'},
+  {id:'m6',name:'Satisfacción',icon:'⭐',unit:'%',  min:50,max:100,desc:'Índice de satisfacción'},
+  {id:'m7',name:'Retención',   icon:'🔒',unit:'%',  min:40,max:99, desc:'Retención de clientes'},
+  {id:'m8',name:'Captación',   icon:'🎯',unit:'%',  min:5, max:60, desc:'Tasa de captación nueva'},
+  {id:'m9',name:'Eficiencia',  icon:'⚡',unit:'%',  min:55,max:100,desc:'Eficiencia de procesos'},
+  {id:'m10',name:'Proyección', icon:'🔭',unit:'x',  min:1.0,max:4.9,desc:'Multiplicador futuro',float:1},
+];
+const history={};
+METRICS.forEach(m=>{history[m.id]=[];});
+const last={};
+function nextVal(m){
+  const prev=last[m.id]!==undefined?last[m.id]:(m.min+m.max)/2;
+  const range=m.max-m.min;
+  const delta=(Math.random()-.48)*range*.08;
+  let v=Math.min(m.max,Math.max(m.min,prev+delta));
+  v=m.float?parseFloat(v.toFixed(1)):Math.round(v);
+  last[m.id]=v;return v;
+}
+function trend(id){
+  const h=history[id];if(h.length<2)return'flat';
+  const d=h[h.length-1]-h[h.length-2];
+  return d>1?'up':d<-1?'down':'flat';
+}
+const tArrow={up:'▲',down:'▼',flat:'→'};
+const tLabel={up:'Subiendo',down:'Bajando',flat:'Estable'};
+const grid=document.getElementById('market-grid');
+METRICS.forEach((m,idx)=>{
+  const card=document.createElement('div');
+  card.className='metric-card';card.id='card-'+m.id;
+  card.innerHTML=`
+    <div class="metric-header">
+      <span class="metric-name">${String(idx+1).padStart(2,'0')} · ${m.name}</span>
+      <span class="metric-icon">${m.icon}</span>
+    </div>
+    <div class="metric-value" id="val-${m.id}">–</div>
+    <div class="metric-sub">${m.desc}</div>
+    <div class="mini-bars" id="bars-${m.id}">${Array(8).fill('<div class="mini-bar"></div>').join('')}</div>
+    <span class="trend flat" id="trend-${m.id}">→ Cargando</span>`;
+  grid.appendChild(card);
+});
+function updateKPIs(){
+  const pairs=[
+    {valEl:'kpi-1',dEl:'kpi-1-d',id:'m1',unit:'%'},
+    {valEl:'kpi-2',dEl:'kpi-2-d',id:'m5',unit:'pts'},
+    {valEl:'kpi-3',dEl:'kpi-3-d',id:'m9',unit:'%'},
+  ];
+  pairs.forEach(p=>{
+    const v=last[p.id]??0;
+    document.getElementById(p.valEl).textContent=v+p.unit;
+    const h=history[p.id];
+    if(h.length>=2){
+      const d=h[h.length-1]-h[h.length-2];
+      const el=document.getElementById(p.dEl);
+      const sign=d>0?'+':'';
+      el.textContent=`${tArrow[d>0?'up':d<0?'down':'flat']} ${sign}${typeof d==='number'&&!Number.isInteger(d)?d.toFixed(1):d}`;
+      el.className='kpi-delta '+(d>0?'up':d<0?'down':'flat');
+    }
+  });
+}
+function update(){
+  const events=[];
+  METRICS.forEach(m=>{
+    const v=nextVal(m);
+    history[m.id].push(v);
+    if(history[m.id].length>8)history[m.id].shift();
+    document.getElementById('val-'+m.id).textContent=v+m.unit;
+    const barsEl=document.getElementById('bars-'+m.id);
+    const bars=barsEl.querySelectorAll('.mini-bar');
+    const range=m.max-m.min;
+    history[m.id].forEach((hv,i)=>{
+      const pct=Math.max(8,Math.round(((hv-m.min)/range)*100));
+      const t=trend(m.id);
+      bars[i].style.height=pct+'%';
+      bars[i].className='mini-bar '+(i===history[m.id].length-1?(t==='flat'?'active':t):'');
+    });
+    const t=trend(m.id);
+    const tEl=document.getElementById('trend-'+m.id);
+    tEl.className='trend '+t;tEl.textContent=tArrow[t]+' '+tLabel[t];
+    const h=history[m.id];
+    if(h.length>=2){
+      const d=Math.abs(h[h.length-1]-h[h.length-2]);
+      const pct=(d/range)*100;
+      if(pct>6)events.push({name:m.name,icon:m.icon,v,unit:m.unit,t,tag:pct>10?'warn':'info'});
+    }
+  });
+  updateKPIs();addLogs(events);
+}
+function ts(){return new Date().toLocaleTimeString('es',{hour12:false});}
+function addLogs(events){
+  const list=document.getElementById('log-list');
+  if(events.length===0){
+    const li=document.createElement('li');
+    li.innerHTML=`<span class="log-ts">${ts()}</span><span class="tag ok">OK</span> Ciclo completado — todas las métricas en rango normal`;
+    list.prepend(li);
+  } else {
+    events.forEach(ev=>{
+      const li=document.createElement('li');
+      li.innerHTML=`<span class="log-ts">${ts()}</span><span class="tag ${ev.tag}">${ev.tag.toUpperCase()}</span> ${ev.icon} ${ev.name}: ${ev.v}${ev.unit} (${tLabel[ev.t]})`;
+      list.prepend(li);
+    });
+  }
+  while(list.children.length>30)list.removeChild(list.lastChild);
+}
+const INTERVAL=10000;
+let lastTick=Date.now();
+function clockTick(){
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('es',{hour12:false});
+  const remaining=Math.max(0,INTERVAL-(Date.now()-lastTick));
+  document.getElementById('timer-bar').style.width=((remaining/INTERVAL)*100)+'%';
+  document.getElementById('next-update').textContent='Próxima actualización: '+Math.ceil(remaining/1000)+'s';
+}
+update();lastTick=Date.now();
+setInterval(()=>{update();lastTick=Date.now();},INTERVAL);
+setInterval(clockTick,250);
+</script>
 </body>
 </html>
