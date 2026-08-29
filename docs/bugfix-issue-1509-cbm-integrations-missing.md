@@ -48,6 +48,30 @@ $RequiredArchiveNames = @($BinName, "LICENSE", "install.ps1", "THIRD_PARTY_NOTIC
 $OptionalArchiveNames = @("cbm-integrations.json")
 ```
 
+El bloque de validación del ZIP debe reemplazarse por:
+
+```powershell
+# ANTES (validación estricta — falla con v0.9.0):
+# $archiveNames = $zip.Entries | Select-Object -ExpandProperty Name
+# $missing = $WindowsArchiveNames | Where-Object { $_ -notin $archiveNames }
+# if ($missing) { throw "unsafe or incomplete release archive: archive must contain exactly one $($missing -join ', ')" }
+
+# DESPUÉS (parche Opción B — cbm-integrations.json opcional):
+$archiveNames = $zip.Entries | Select-Object -ExpandProperty Name
+
+$missingRequired = $RequiredArchiveNames | Where-Object { $_ -notin $archiveNames }
+if ($missingRequired) {
+    throw "unsafe or incomplete release archive: missing required files: $($missingRequired -join ', ')"
+}
+
+$missingOptional = $OptionalArchiveNames | Where-Object { $_ -notin $archiveNames }
+if ($missingOptional) {
+    Write-Warning "Optional file(s) not found in archive (will be skipped): $($missingOptional -join ', ')"
+}
+```
+
+> **Nota:** Este parche permite instalar en v0.9.0 sin romper la validación de seguridad del ZIP. Los archivos requeridos siguen siendo verificados estrictamente.
+
 **Recomendación:** La Opción A es la correcta a largo plazo. La Opción B puede servir como parche en `main` mientras se prepara el próximo release que incluya el archivo.
 
 ## Pasos para reproducir
