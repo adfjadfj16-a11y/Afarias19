@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "fraccional": {
+      "source": "urvana/fraccional-skills",
+      "sourceType": "github",
+      "skillPath": "skills/fraccional/SKILL.md",
+      "computedHash": "c1b65ce18bd0e6006b8e67741c083cac38818ec51943ce3daf47e5b27cb46239"
+    }
+  }
+}
