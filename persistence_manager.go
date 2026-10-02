@@ -3,11 +3,13 @@
 package main
 
 import (
+	"bytes"        // nos permite inspeccionar y normalizar contenido de archivos
 	"encoding/json" // nos permite convertir datos Go a formato JSON y viceversa
 	"errors"        // nos permite crear mensajes de error personalizados
 	"fmt"           // nos permite imprimir mensajes con formato en pantalla
 	"log"           // nos permite registrar errores graves y detener el programa de forma segura
 	"os"            // nos permite leer y escribir archivos en el sistema
+	"path/filepath" // nos permite crear directorios padres de forma segura
 	"sync"          // nos permite proteger los datos cuando hay acceso simultáneo
 )
 
@@ -35,6 +37,10 @@ func NuevoPersistenceManager(rutaArchivo string) (*PersistenceManager, error) {
 	pm := &PersistenceManager{
 		rutaArchivo: rutaArchivo,
 		datos:       make(map[string]interface{}),
+	}
+
+	if err := os.MkdirAll(filepath.Dir(rutaArchivo), 0755); err != nil {
+		return nil, err
 	}
 
 	// Intentamos cargar los datos desde el archivo (si ya existe)
@@ -130,6 +136,10 @@ func (pm *PersistenceManager) LimpiarTodo() error {
 // Usa escritura atómica: primero escribe en un archivo temporal y luego lo renombra.
 // Esto evita que el archivo quede corrupto si el programa se cierra a mitad de escritura.
 func (pm *PersistenceManager) persistir() error {
+	if err := os.MkdirAll(filepath.Dir(pm.rutaArchivo), 0755); err != nil {
+		return err
+	}
+
 	// Convertimos el mapa a formato JSON con sangría (más fácil de leer)
 	contenido, err := json.MarshalIndent(pm.datos, "", "  ")
 	if err != nil {
@@ -152,11 +162,25 @@ func (pm *PersistenceManager) cargar() error {
 	// Leemos todo el contenido del archivo
 	contenido, err := os.ReadFile(pm.rutaArchivo)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 		return err // puede ser os.ErrNotExist si el archivo no existe
 	}
 
+	if len(bytes.TrimSpace(contenido)) == 0 {
+		pm.datos = make(map[string]interface{})
+		return nil
+	}
+
 	// Convertimos el JSON de vuelta a un mapa Go
-	return json.Unmarshal(contenido, &pm.datos)
+	if err := json.Unmarshal(contenido, &pm.datos); err != nil {
+		return err
+	}
+	if pm.datos == nil {
+		pm.datos = make(map[string]interface{})
+	}
+	return nil
 }
 
 // main es la función principal: se ejecuta cuando arrancamos el programa.
