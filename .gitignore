@@ -1,0 +1,5 @@
+.afarias19/
+*.tmp
+*.log
+bin/
+.DS_Store
