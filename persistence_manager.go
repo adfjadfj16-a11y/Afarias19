@@ -3,11 +3,13 @@
 package main
 
 import (
+	"bytes"        // nos permite detectar archivos vacíos o con solo espacios
 	"encoding/json" // nos permite convertir datos Go a formato JSON y viceversa
 	"errors"        // nos permite crear mensajes de error personalizados
 	"fmt"           // nos permite imprimir mensajes con formato en pantalla
 	"log"           // nos permite registrar errores graves y detener el programa de forma segura
 	"os"            // nos permite leer y escribir archivos en el sistema
+	"path/filepath" // nos permite crear directorios padres de la ruta del archivo
 	"sync"          // nos permite proteger los datos cuando hay acceso simultáneo
 )
 
@@ -35,6 +37,11 @@ func NuevoPersistenceManager(rutaArchivo string) (*PersistenceManager, error) {
 	pm := &PersistenceManager{
 		rutaArchivo: rutaArchivo,
 		datos:       make(map[string]interface{}),
+	}
+
+	// Aseguramos que la ruta del archivo tenga sus directorios padres creados
+	if err := os.MkdirAll(filepath.Dir(rutaArchivo), 0755); err != nil {
+		return nil, err
 	}
 
 	// Intentamos cargar los datos desde el archivo (si ya existe)
@@ -153,6 +160,12 @@ func (pm *PersistenceManager) cargar() error {
 	contenido, err := os.ReadFile(pm.rutaArchivo)
 	if err != nil {
 		return err // puede ser os.ErrNotExist si el archivo no existe
+	}
+
+	// Si el archivo está vacío o solo contiene espacios, se considera almacenamiento vacío.
+	if len(bytes.TrimSpace(contenido)) == 0 {
+		pm.datos = make(map[string]interface{})
+		return nil
 	}
 
 	// Convertimos el JSON de vuelta a un mapa Go
