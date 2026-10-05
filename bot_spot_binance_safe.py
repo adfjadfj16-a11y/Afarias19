@@ -16,6 +16,15 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from private_ledger import (
+    append_event,
+    default_data_dir,
+    ensure_outside_repository,
+    import_binance_csv,
+    secure_mkdir,
+    verify_ledger,
+)
+
 TESTNET_BASE_URL = "https://testnet.binance.vision"
 SYMBOL = os.getenv("SYMBOL", "PEPEUSDT").upper()
 INTERVAL = os.getenv("INTERVAL", "5m")
@@ -41,8 +50,10 @@ FAST_EMA = 20
 SLOW_EMA = 50
 RSI_PERIOD = 14
 ATR_PERIOD = 14
-STATE_FILE = Path(os.getenv("STATE_FILE", "position_spot_testnet.json"))
-CSV_FILE = Path(os.getenv("CSV_FILE", "trades_spot_testnet.csv"))
+DATA_DIR = default_data_dir()
+STATE_FILE = Path(os.getenv("STATE_FILE", DATA_DIR / "position_spot_testnet.json"))
+CSV_FILE = Path(os.getenv("CSV_FILE", DATA_DIR / "trades_spot_testnet.csv"))
+LEDGER_FILE = Path(os.getenv("LEDGER_FILE", DATA_DIR / "investment-ledger.jsonl"))
 
 
 @dataclass(frozen=True)
@@ -217,7 +228,8 @@ def load_state(path=STATE_FILE):
 
 
 def save_state(state, path=STATE_FILE):
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = ensure_outside_repository(path)
+    secure_mkdir(path.parent)
     temporary_path = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -238,9 +250,12 @@ def save_state(state, path=STATE_FILE):
 
 
 def append_trade(action, price, quantity, pnl=None, path=CSV_FILE):
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = ensure_outside_repository(path)
+    secure_mkdir(path.parent)
     is_new = not path.exists()
     with path.open("a", newline="", encoding="utf-8") as trade_file:
+        if os.name == "posix":
+            os.chmod(path, 0o600)
         writer = csv.writer(trade_file)
         if is_new:
             writer.writerow(
@@ -330,10 +345,29 @@ def run_once():
     candles = fetch_closed_candles()
     indicators = calculate_indicators(candles)
     state = load_state()
-    new_state, trade = process_candle(state, candles[-1], indicators)
-    save_state(new_state)
-
     candle = candles[-1]
+    if candle.close_time <= state["last_candle_time"]:
+        print("Closed candle already recorded; no duplicate evaluation.")
+        return
+    new_state, trade = process_candle(state, candles[-1], indicators)
+    append_event(
+        LEDGER_FILE,
+        "paper_evaluation",
+        {
+            "event_id": f"paper:{SYMBOL}:{INTERVAL}:{candle.close_time}",
+            "symbol": SYMBOL,
+            "interval": INTERVAL,
+            "candle_close_time": candle.close_time,
+            "close": candle.close,
+            "fast_ema": indicators.fast_ema,
+            "slow_ema": indicators.slow_ema,
+            "rsi": indicators.rsi,
+            "atr": indicators.atr,
+            "action": trade["action"] if trade else "HOLD",
+            "paper_fill": trade,
+        },
+    )
+    save_state(new_state)
     print(
         f"{SYMBOL} {INTERVAL} close={candle.close:.12g} "
         f"EMA{FAST_EMA}={indicators.fast_ema:.12g} "
@@ -350,7 +384,60 @@ def run_once():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--loop", action="store_true", help="Check once per candle interval.")
+    commands = parser.add_mutually_exclusive_group()
+    commands.add_argument("--verify-ledger", action="store_true", help="Verify local ledger integrity and exit.")
+    parser.add_argument(
+        "--import-binance-csv",
+        metavar="PATH",
+        help="Import a manually exported Binance trade-history CSV into the separate local ledger.",
+    )
+    commands.add_argument(
+        "--backtest",
+        metavar="OHLCV_CSV",
+        help="Run a chronological paper backtest on a local OHLCV CSV.",
+    )
+    commands.add_argument(
+        "--walk-forward",
+        metavar="OHLCV_CSV",
+        help="Evaluate train, chronological walk-forward folds, and a final untouched holdout.",
+    )
+    parser.add_argument("--folds", type=int, default=4, help="Number of walk-forward validation folds.")
+    parser.add_argument("--initial-cash", type=float, default=1000.0)
+    parser.add_argument("--spread-bps", type=float, default=2.0)
+    parser.add_argument("--slippage-bps", type=float, default=2.0)
     args = parser.parse_args()
+    if args.verify_ledger:
+        print(json.dumps(verify_ledger(LEDGER_FILE), indent=2))
+        return 0
+    if args.import_binance_csv:
+        result = import_binance_csv(args.import_binance_csv, LEDGER_FILE)
+        print(json.dumps(result, indent=2))
+        return 0
+    if args.backtest or args.walk_forward:
+        from binance_backtest import backtest, load_candles_csv, walk_forward
+
+        try:
+            candles = load_candles_csv(args.backtest or args.walk_forward)
+            if INTERVAL not in INTERVAL_SECONDS:
+                raise ValueError(f"Unsupported candle interval: {INTERVAL}")
+            options = {
+                "initial_cash": args.initial_cash,
+                "quote_size": QUOTE_ORDER_SIZE,
+                "commission": FEE_RATE,
+                "spread_bps": args.spread_bps,
+                "slippage_bps": args.slippage_bps,
+                "interval": INTERVAL,
+            }
+            result = (
+                backtest(candles, SLOW_EMA, len(candles), **options)
+                if args.backtest
+                else walk_forward(candles, folds=args.folds, **options)
+            )
+        except (OSError, ValueError) as error:
+            print(f"Backtest stopped safely: {error}", file=sys.stderr)
+            return 1
+        print(json.dumps(result, indent=2, allow_nan=False))
+        return 0
     while True:
         try:
             run_once()

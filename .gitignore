@@ -1,0 +1,5 @@
+# Local investment records must never be committed.
+position_spot_testnet.json
+trades_spot_testnet.csv
+investment-ledger.jsonl
+backtest-report*.json
