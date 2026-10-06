@@ -35,6 +35,8 @@ INTERVAL_SECONDS = {
     "3d": 259200,
     "1w": 604800,
 }
+RETRY_INITIAL_SECONDS = 5
+RETRY_MAX_SECONDS = 60
 QUOTE_ORDER_SIZE = float(os.getenv("QUOTE_ORDER_SIZE", "5"))
 FEE_RATE = float(os.getenv("PAPER_FEE_RATE", "0.001"))
 FAST_EMA = 20
@@ -63,6 +65,10 @@ class Indicators:
     atr: float
 
 
+class RetryableError(RuntimeError):
+    pass
+
+
 def fetch_closed_candles(symbol=SYMBOL, interval=INTERVAL, limit=100):
     query = urllib.parse.urlencode(
         {"symbol": symbol, "interval": interval, "limit": limit}
@@ -75,10 +81,10 @@ def fetch_closed_candles(symbol=SYMBOL, interval=INTERVAL, limit=100):
         with urllib.request.urlopen(request, timeout=10) as response:
             rows = json.loads(response.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"Could not fetch Testnet candles: {error}") from error
+        raise RetryableError(f"Could not fetch Testnet candles: {error}") from error
 
     if not isinstance(rows, list):
-        raise RuntimeError("Unexpected candle response from Binance Testnet.")
+        raise RetryableError("Unexpected candle response from Binance Testnet.")
     now_ms = int(time.time() * 1000)
     candles = []
     try:
@@ -105,14 +111,14 @@ def fetch_closed_candles(symbol=SYMBOL, interval=INTERVAL, limit=100):
             if candle.close_time < now_ms:
                 candles.append(candle)
     except (IndexError, TypeError, ValueError) as error:
-        raise RuntimeError(f"Invalid candle data from Binance Testnet: {error}") from error
+        raise RetryableError(f"Invalid candle data from Binance Testnet: {error}") from error
 
     if len(candles) < SLOW_EMA + 1:
-        raise RuntimeError(
+        raise RetryableError(
             f"Need at least {SLOW_EMA + 1} closed candles; received {len(candles)}."
         )
     if any(a.open_time >= b.open_time for a, b in zip(candles, candles[1:])):
-        raise RuntimeError("Candle timestamps are not strictly increasing.")
+        raise RetryableError("Candle timestamps are not strictly increasing.")
     return candles
 
 
@@ -351,6 +357,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--loop", action="store_true", help="Check once per candle interval.")
     args = parser.parse_args()
+    if args.loop:
+        retry_delay = RETRY_INITIAL_SECONDS
+        try:
+            while True:
+                try:
+                    run_once()
+                except (RetryableError, OSError) as error:
+                    print(
+                        f"Temporary failure: {error}. Retrying in {retry_delay} seconds.",
+                        file=sys.stderr,
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, RETRY_MAX_SECONDS)
+                except (RuntimeError, ValueError) as error:
+                    print(f"Stopped safely: {error}", file=sys.stderr)
+                    return 1
+                else:
+                    retry_delay = RETRY_INITIAL_SECONDS
+                    time.sleep(INTERVAL_SECONDS[INTERVAL])
+        except KeyboardInterrupt:
+            print("Stopped by user.")
+            return 0
+
     while True:
         try:
             run_once()

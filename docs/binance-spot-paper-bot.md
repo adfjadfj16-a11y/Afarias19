@@ -20,6 +20,13 @@ To check every configured candle interval:
 BINANCE_TESTNET=1 ENABLE_LIVE_TRADING=NO python3 bot_spot_binance_safe.py --loop
 ```
 
+In loop mode, temporary market-data and storage failures are retried with
+exponential backoff (5 to 60 seconds); the delay resets after a successful
+check. Press Ctrl-C to stop cleanly. Position state is saved locally after each
+processed candle so the bot can resume after a restart. This does not restart a
+process terminated by the operating system; use a service manager if automatic
+process restarts are needed.
+
 Defaults are `PEPEUSDT`, `5m`, a simulated 5 USDT quote amount, and a 0.1%
 simulated fee on each side. `SYMBOL`, `INTERVAL`, `QUOTE_ORDER_SIZE`,
 `PAPER_FEE_RATE`, `STATE_FILE`, and `CSV_FILE` can be overridden with

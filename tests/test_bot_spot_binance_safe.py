@@ -6,10 +6,14 @@ from pathlib import Path
 from bot_spot_binance_safe import (
     Candle,
     Indicators,
+    INTERVAL,
+    INTERVAL_SECONDS,
+    RetryableError,
     calculate_indicators,
     default_state,
     ema,
     load_state,
+    main,
     process_candle,
     run_once,
     save_state,
@@ -104,6 +108,43 @@ class BinancePaperBotTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "Only Binance Testnet"):
                 run_once()
+
+    def test_loop_retries_transient_failures_with_backoff_and_stops_cleanly(self):
+        with (
+            patch("sys.argv", ["bot_spot_binance_safe.py", "--loop"]),
+            patch(
+                "bot_spot_binance_safe.run_once",
+                side_effect=[
+                    RetryableError("temporary network failure"),
+                    None,
+                    RetryableError("temporary network failure"),
+                    None,
+                ],
+            ) as run_once_mock,
+            patch(
+                "bot_spot_binance_safe.time.sleep",
+                side_effect=[None, None, None, KeyboardInterrupt],
+            ) as sleep_mock,
+        ):
+            self.assertEqual(main(), 0)
+
+        self.assertEqual(run_once_mock.call_count, 4)
+        self.assertEqual(
+            [call.args[0] for call in sleep_mock.call_args_list],
+            [5, INTERVAL_SECONDS[INTERVAL], 5, INTERVAL_SECONDS[INTERVAL]],
+        )
+
+    def test_loop_stops_on_nonretryable_configuration_error(self):
+        with (
+            patch("sys.argv", ["bot_spot_binance_safe.py", "--loop"]),
+            patch(
+                "bot_spot_binance_safe.run_once",
+                side_effect=RuntimeError("invalid configuration"),
+            ),
+            patch("bot_spot_binance_safe.time.sleep") as sleep_mock,
+        ):
+            self.assertEqual(main(), 1)
+        sleep_mock.assert_not_called()
 
 
 if __name__ == "__main__":
