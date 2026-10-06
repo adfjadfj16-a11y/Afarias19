@@ -179,9 +179,18 @@ def default_state():
 def load_state(path=STATE_FILE):
     try:
         with path.open(encoding="utf-8") as state_file:
-            state = json.load(state_file)
+            contents = state_file.read()
     except FileNotFoundError:
         return default_state()
+
+    if not contents.strip():
+        return default_state()
+
+    try:
+        state = json.loads(contents)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"Invalid state file: {path}") from error
+
     if not isinstance(state, dict):
         raise RuntimeError(f"Invalid state file: {path}")
     if state.get("version") != 1:

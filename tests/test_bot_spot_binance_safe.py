@@ -87,6 +87,12 @@ class BinancePaperBotTests(unittest.TestCase):
             save_state(state, path)
             self.assertEqual(load_state(path), state)
 
+    def test_empty_state_file_is_treated_as_default_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            path.write_text("\n\n", encoding="utf-8")
+            self.assertEqual(load_state(path), default_state())
+
     def test_live_trading_setting_fails_closed_before_network_access(self):
         with patch.dict(
             "os.environ",
