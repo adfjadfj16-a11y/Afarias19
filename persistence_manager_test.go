@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -206,6 +208,126 @@ func TestGuardarClavesVacias(t *testing.T) {
 	// Intentar guardar una clave vacía debe fallar
 	if err := pm.Guardar("", "valor"); err == nil {
 		t.Fatal("Guardar con clave vacía debería devolver un error")
+	}
+}
+
+func TestConcurrentWritesWith50Goroutines(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "persist")
+	path := filepath.Join(dir, "datos.json")
+
+	pm, err := NuevoPersistenceManager(path)
+	if err != nil {
+		t.Fatalf("NuevoPersistenceManager devolvió error inesperado: %v", err)
+	}
+
+	numGoroutines := 50
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+	errChan := make(chan error, numGoroutines)
+
+	// 50 goroutines writing different keys concurrently
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			defer wg.Done()
+			clave := fmt.Sprintf("key_%d", index)
+			valor := fmt.Sprintf("value_%d", index)
+			if err := pm.Guardar(clave, valor); err != nil {
+				errChan <- fmt.Errorf("goroutine %d: failed to save: %w", index, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for errors
+	for err := range errChan {
+		t.Errorf("Concurrent write error: %v", err)
+	}
+
+	// Verify all keys were written correctly
+	claves := pm.Claves()
+	if len(claves) != numGoroutines {
+		t.Fatalf("Expected %d keys, got %d", numGoroutines, len(claves))
+	}
+
+	// Verify each key has the correct value
+	for i := 0; i < numGoroutines; i++ {
+		clave := fmt.Sprintf("key_%d", i)
+		expectedValue := fmt.Sprintf("value_%d", i)
+
+		valor, ok := pm.Obtener(clave)
+		if !ok {
+			t.Fatalf("Key %s not found after concurrent writes", clave)
+		}
+		if valor != expectedValue {
+			t.Fatalf("Key %s has wrong value: got %v, want %s", clave, valor, expectedValue)
+		}
+	}
+}
+
+func TestConcurrentReadsAndWrites(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "persist")
+	path := filepath.Join(dir, "datos.json")
+
+	pm, err := NuevoPersistenceManager(path)
+	if err != nil {
+		t.Fatalf("NuevoPersistenceManager devolvió error inesperado: %v", err)
+	}
+
+	// Pre-populate with some data
+	for i := 0; i < 10; i++ {
+		if err := pm.Guardar(fmt.Sprintf("initial_%d", i), i); err != nil {
+			t.Fatalf("Failed to save initial data: %v", err)
+		}
+	}
+
+	numGoroutines := 30
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines * 2) // Writers and readers
+	errChan := make(chan error, numGoroutines*2)
+
+	// 15 goroutines writing new keys
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			defer wg.Done()
+			clave := fmt.Sprintf("concurrent_%d", index)
+			valor := fmt.Sprintf("value_%d", index)
+			if err := pm.Guardar(clave, valor); err != nil {
+				errChan <- fmt.Errorf("writer %d: failed to save: %w", index, err)
+			}
+		}(i)
+	}
+
+	// 15 goroutines reading keys
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			defer wg.Done()
+			// Try to read both initial and concurrent keys
+			initialKey := fmt.Sprintf("initial_%d", index%10)
+			if _, ok := pm.Obtener(initialKey); !ok {
+				errChan <- fmt.Errorf("reader %d: failed to find initial key %s", index, initialKey)
+			}
+			// Check existence
+			if !pm.Existe(initialKey) {
+				errChan <- fmt.Errorf("reader %d: Existe() returned false for key %s", index, initialKey)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check for errors
+	for err := range errChan {
+		t.Errorf("Concurrent read/write error: %v", err)
+	}
+
+	// Verify final state
+	claves := pm.Claves()
+	expectedCount := 10 + numGoroutines // 10 initial + 30 concurrent writes
+	if len(claves) != expectedCount {
+		t.Fatalf("Expected %d keys, got %d", expectedCount, len(claves))
 	}
 }
 
