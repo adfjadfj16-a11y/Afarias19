@@ -44,6 +44,15 @@ func NuevoPersistenceManager(rutaArchivo string) (*PersistenceManager, error) {
 	if err := os.MkdirAll(filepath.Dir(rutaArchivo), 0o755); err != nil {
 		return nil, err
 	}
+	if _, err := os.Stat(rutaArchivo); err != nil {
+		if os.IsNotExist(err) {
+			if err := os.WriteFile(rutaArchivo, []byte{}, 0o644); err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
 
 	// Intentamos cargar los datos desde el archivo (si ya existe)
 	if err := pm.cargar(); err != nil && !errors.Is(err, os.ErrNotExist) {
