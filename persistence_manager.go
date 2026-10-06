@@ -143,33 +143,40 @@ func (pm *PersistenceManager) persistir() error {
 	rutaTemporal := pm.rutaArchivo + ".tmp"
 	f, err := os.OpenFile(rutaTemporal, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
 
 	// Comprimimos y codificamos el JSON directamente al archivo, sin pasar por memoria
 	gz, err := gzip.NewWriterLevel(f, gzip.BestCompression)
 	if err != nil {
 		f.Close()
-		return err
+		os.Remove(rutaTemporal)
+		return fmt.Errorf("failed to create gzip writer: %w", err)
 	}
+	
 	encErr := json.NewEncoder(gz).Encode(pm.datos)
 	closeGzErr := gz.Close()
 	closeFileErr := f.Close()
-	if encErr != nil {
+	
+	// Limpiamos el archivo temporal si hubo algún error durante la escritura
+	if encErr != nil || closeGzErr != nil || closeFileErr != nil {
 		os.Remove(rutaTemporal)
-		return encErr
-	}
-	if closeGzErr != nil {
-		os.Remove(rutaTemporal)
-		return closeGzErr
-	}
-	if closeFileErr != nil {
-		os.Remove(rutaTemporal)
-		return closeFileErr
+		if encErr != nil {
+			return fmt.Errorf("failed to encode JSON: %w", encErr)
+		}
+		if closeGzErr != nil {
+			return fmt.Errorf("failed to close gzip writer: %w", closeGzErr)
+		}
+		return fmt.Errorf("failed to close temp file: %w", closeFileErr)
 	}
 
 	// Renombramos el temporal al archivo definitivo (operación atómica en la mayoría de sistemas)
-	return os.Rename(rutaTemporal, pm.rutaArchivo)
+	if err := os.Rename(rutaTemporal, pm.rutaArchivo); err != nil {
+		os.Remove(rutaTemporal)
+		return fmt.Errorf("failed to rename temp file to final location: %w", err)
+	}
+	
+	return nil
 }
 
 // cargar lee el archivo y carga los datos en memoria.
@@ -193,13 +200,13 @@ func (pm *PersistenceManager) cargar() error {
 	// Cualquier otro error se devuelve directamente.
 	gr, err := gzip.NewReader(bytes.NewReader(contenido))
 	if err != nil && !errors.Is(err, gzip.ErrHeader) {
-		return err
+		return fmt.Errorf("failed to read gzip header: %w", err)
 	}
 	if err == nil {
 		defer gr.Close()
 		descomprimido, err := io.ReadAll(gr)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to decompress gzip data: %w", err)
 		}
 		contenido = descomprimido
 	}
@@ -212,7 +219,7 @@ func (pm *PersistenceManager) cargar() error {
 
 	// Convertimos el JSON de vuelta a un mapa Go
 	if err := json.Unmarshal(contenido, &pm.datos); err != nil {
-		return err
+		return fmt.Errorf("failed to parse JSON data: %w", err)
 	}
 	if pm.datos == nil {
 		pm.datos = make(map[string]interface{})
