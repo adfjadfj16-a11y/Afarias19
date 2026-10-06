@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -206,6 +208,139 @@ func TestGuardarClavesVacias(t *testing.T) {
 	// Intentar guardar una clave vacía debe fallar
 	if err := pm.Guardar("", "valor"); err == nil {
 		t.Fatal("Guardar con clave vacía debería devolver un error")
+	}
+}
+
+// TestConcurrentWrites prueba la seguridad de la concurrencia con 50 goroutines
+// escribiendo diferentes claves simultáneamente.
+func TestConcurrentWrites(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "persist")
+	path := filepath.Join(dir, "datos.json")
+
+	pm, err := NuevoPersistenceManager(path)
+	if err != nil {
+		t.Fatalf("NuevoPersistenceManager devolvió error inesperado: %v", err)
+	}
+
+	// 50 goroutines escribiendo diferentes claves simultáneamente
+	numGoroutines := 50
+	var wg sync.WaitGroup
+	errChan := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			clave := fmt.Sprintf("key_%d", index)
+			valor := fmt.Sprintf("value_%d", index)
+			if err := pm.Guardar(clave, valor); err != nil {
+				errChan <- fmt.Errorf("Guardar(%q, %q) falló: %w", clave, valor, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Verificar que no hubo errores en las escrituras
+	for err := range errChan {
+		if err != nil {
+			t.Fatalf("Error en goroutine: %v", err)
+		}
+	}
+
+	// Verificar que todas las claves se escribieron correctamente
+	claves := pm.Claves()
+	if len(claves) != numGoroutines {
+		t.Fatalf("Número incorrecto de claves: got %d want %d", len(claves), numGoroutines)
+	}
+
+	// Verificar que cada clave tiene el valor correcto
+	for i := 0; i < numGoroutines; i++ {
+		clave := fmt.Sprintf("key_%d", i)
+		valorEsperado := fmt.Sprintf("value_%d", i)
+		valor, ok := pm.Obtener(clave)
+		if !ok {
+			t.Fatalf("Clave %q no encontrada después de escrituras concurrentes", clave)
+		}
+		if valor != valorEsperado {
+			t.Fatalf("Valor incorrecto para clave %q: got %v want %v", clave, valor, valorEsperado)
+		}
+	}
+}
+
+// TestConcurrentReadsAndWrites prueba la seguridad de la concurrencia con múltiples
+// goroutines leyendo y escribiendo simultáneamente.
+func TestConcurrentReadsAndWrites(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "persist")
+	path := filepath.Join(dir, "datos.json")
+
+	pm, err := NuevoPersistenceManager(path)
+	if err != nil {
+		t.Fatalf("NuevoPersistenceManager devolvió error inesperado: %v", err)
+	}
+
+	// Guardar algunos valores iniciales
+	for i := 0; i < 10; i++ {
+		clave := fmt.Sprintf("initial_key_%d", i)
+		valor := fmt.Sprintf("initial_value_%d", i)
+		if err := pm.Guardar(clave, valor); err != nil {
+			t.Fatalf("Guardar inicial falló: %v", err)
+		}
+	}
+
+	numReaders := 25
+	numWriters := 25
+
+	var wg sync.WaitGroup
+
+	// 25 goroutines leyendo
+	for i := 0; i < numReaders; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			// Leer todas las claves múltiples veces
+			for j := 0; j < 100; j++ {
+				pm.Claves()
+				for k := 0; k < 10; k++ {
+					clave := fmt.Sprintf("initial_key_%d", k)
+					pm.Obtener(clave)
+					pm.Existe(clave)
+				}
+			}
+		}(i)
+	}
+
+	// 25 goroutines escribiendo
+	for i := 0; i < numWriters; i++ {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			// Escribir nuevas claves
+			for j := 0; j < 10; j++ {
+				clave := fmt.Sprintf("concurrent_key_%d_%d", index, j)
+				valor := fmt.Sprintf("concurrent_value_%d_%d", index, j)
+				pm.Guardar(clave, valor)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verificar que el estado final es consistente
+	claves := pm.Claves()
+	// Deberíamos tener las 10 claves iniciales + (25 writers * 10 nuevas claves)
+	expectedMinKeys := 10 + (25 * 10)
+	if len(claves) < expectedMinKeys {
+		t.Fatalf("Número incorrecto de claves: got %d, expected at least %d", len(claves), expectedMinKeys)
+	}
+
+	// Verificar que todas las claves iniciales aún existen
+	for i := 0; i < 10; i++ {
+		clave := fmt.Sprintf("initial_key_%d", i)
+		if !pm.Existe(clave) {
+			t.Fatalf("Clave inicial %q no encontrada", clave)
+		}
 	}
 }
 
