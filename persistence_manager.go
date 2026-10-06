@@ -11,6 +11,7 @@ import (
 	"io"            // nos permite leer y escribir flujos de datos
 	"log"           // nos permite registrar errores graves y detener el programa de forma segura
 	"os"            // nos permite leer y escribir archivos en el sistema
+	"path/filepath"  // nos permite manejar rutas de archivos de forma portable
 	"sync"          // nos permite proteger los datos cuando hay acceso simultáneo
 )
 
@@ -38,6 +39,10 @@ func NuevoPersistenceManager(rutaArchivo string) (*PersistenceManager, error) {
 	pm := &PersistenceManager{
 		rutaArchivo: rutaArchivo,
 		datos:       make(map[string]interface{}),
+	}
+
+	if err := os.MkdirAll(filepath.Dir(rutaArchivo), 0o755); err != nil {
+		return nil, err
 	}
 
 	// Intentamos cargar los datos desde el archivo (si ya existe)
@@ -171,10 +176,15 @@ func (pm *PersistenceManager) persistir() error {
 // Detecta automáticamente si el archivo está comprimido con gzip o es JSON plano,
 // para mantener compatibilidad con archivos creados antes de añadir compresión.
 func (pm *PersistenceManager) cargar() error {
-	// Leemos todo el contenido del archivo
+	// Si el archivo no existe, el comportamiento correcto es dejar el mapa vacío.
 	contenido, err := os.ReadFile(pm.rutaArchivo)
 	if err != nil {
 		return err // puede ser os.ErrNotExist si el archivo no existe
+	}
+
+	if len(contenido) == 0 {
+		pm.datos = make(map[string]interface{})
+		return nil
 	}
 
 	// Intentamos descomprimir con gzip.
@@ -194,8 +204,20 @@ func (pm *PersistenceManager) cargar() error {
 		contenido = descomprimido
 	}
 
+	// Si el contenido descomprimido está vacío, se asume almacenamiento vacío.
+	if len(contenido) == 0 {
+		pm.datos = make(map[string]interface{})
+		return nil
+	}
+
 	// Convertimos el JSON de vuelta a un mapa Go
-	return json.Unmarshal(contenido, &pm.datos)
+	if err := json.Unmarshal(contenido, &pm.datos); err != nil {
+		return err
+	}
+	if pm.datos == nil {
+		pm.datos = make(map[string]interface{})
+	}
+	return nil
 }
 
 // main es la función principal: se ejecuta cuando arrancamos el programa.
