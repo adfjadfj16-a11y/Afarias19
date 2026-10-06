@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -203,11 +202,7 @@ func CheckPermissions() CheckResult {
 		}
 	}
 
-	// Verificar que el propietario sea el usuario actual
-	currentUser, err := user.Current()
-	if err == nil && stat.Sys() != nil {
-		// Nota: verificación completa de propietario es complicada, simplemente verificar ejecutabilidad
-	}
+	// Nota: verificación completa de propietario es complicada, simplemente verificar ejecutabilidad
 
 	return CheckResult{
 		Name:    "Permissions",

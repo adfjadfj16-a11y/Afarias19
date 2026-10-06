@@ -39,9 +39,9 @@ func TestNuevoPersistenceManager_ExistingFile(t *testing.T) {
 
 	// Crear archivo con datos previos
 	datosIniciales := map[string]interface{}{
-		"nombre":   "Afarias19",
-		"version":  1,
-		"activo":   true,
+		"nombre":  "Afarias19",
+		"version": 1,
+		"activo":  true,
 	}
 	contenido, _ := json.MarshalIndent(datosIniciales, "", "  ")
 	os.WriteFile(rutaArchivo, contenido, 0644)
@@ -348,23 +348,28 @@ func TestDirectoriosPadres(t *testing.T) {
 	tmpDir := t.TempDir()
 	rutaAnidada := filepath.Join(tmpDir, "nivel1", "nivel2", "test.json")
 
-	// El gestor debería crear directorios padres automáticamente
-	// (o al menos no fallar)
-	pm, err := NuevoPersistenceManager(rutaAnidada)
+	// Crear directorios padres manualmente
+	// (el gestor puede no crearlos automáticamente)
+	os.MkdirAll(filepath.Dir(rutaAnidada), 0755)
 
-	// Verificar que fue creado o bien maneja el error
+	// Crear el gestor
+	pm, err := NuevoPersistenceManager(rutaAnidada)
 	if err != nil {
-		// OK si falla, pero debería documentarse
-		t.Logf("Parent directories not auto-created (may be expected): %v", err)
-	} else if pm != nil {
-		pm.Guardar("test", "value")
-		// Verificar persistencia
-		contenido, err := os.ReadFile(rutaAnidada)
-		if err != nil {
-			t.Error("Failed to persist with nested path")
-		}
-		if len(contenido) == 0 {
-			t.Error("File should contain data")
-		}
+		t.Fatalf("Failed to create manager with nested path: %v", err)
+	}
+
+	if pm == nil {
+		t.Fatal("PersistenceManager should not be nil")
+	}
+
+	pm.Guardar("test", "value")
+
+	// Verificar persistencia
+	contenido, err := os.ReadFile(rutaAnidada)
+	if err != nil {
+		t.Errorf("Failed to read file at nested path: %v", err)
+	}
+	if len(contenido) == 0 {
+		t.Error("File should contain data")
 	}
 }

@@ -7,10 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
-	// Nota: En una implementación real, esto sería una importación de módulo
-	// Para propósitos de demostración, incluimos el código aquí
+	auditpkg "github.com/adfjadfj16-a11y/Afarias19/pkg/audit"
+	errorspkg "github.com/adfjadfj16-a11y/Afarias19/pkg/errors"
 )
 
 // CheckStatus representa el resultado de una verificación
@@ -24,26 +25,27 @@ const (
 
 // CheckResult contiene el resultado de una verificación
 type CheckResult struct {
-	Name      string    `json:"name"`
+	Name      string      `json:"name"`
 	Status    CheckStatus `json:"status"`
-	Message   string    `json:"message"`
-	Remedy    string    `json:"remedy,omitempty"`
-	Timestamp string    `json:"timestamp"`
+	Message   string      `json:"message"`
+	Remedy    string      `json:"remedy,omitempty"`
+	Timestamp string      `json:"timestamp"`
 }
 
 // SelfCheckReport es el informe completo de auto-verificación
 type SelfCheckReport struct {
-	Version      string         `json:"version"`
-	Timestamp    string         `json:"timestamp"`
-	Status       string         `json:"status"` // "ok", "warning", "critical"
-	Checks       []CheckResult  `json:"checks"`
-	Summary      map[string]int `json:"summary"` // count of PASS, WARN, FAIL
-	Recommendations []string   `json:"recommendations,omitempty"`
+	Version         string         `json:"version"`
+	Timestamp       string         `json:"timestamp"`
+	Status          string         `json:"status"` // "ok", "warning", "critical"
+	Checks          []CheckResult  `json:"checks"`
+	Summary         map[string]int `json:"summary"` // count of PASS, WARN, FAIL
+	Recommendations []string       `json:"recommendations,omitempty"`
 }
 
 func main() {
 	outputJSON := flag.Bool("json", false, "Output in JSON format")
 	verbose := flag.Bool("v", false, "Verbose output")
+	auditReport := flag.String("audit-report", "", "Generate compliance audit report at the given JSON path")
 	help := flag.Bool("help", false, "Show help")
 	version := flag.Bool("version", false, "Show version")
 	flag.Parse()
@@ -55,6 +57,7 @@ func main() {
 		fmt.Printf("  -json      Output in JSON format (default: human-readable)\n")
 		fmt.Printf("  -v         Verbose output (show remedies)\n")
 		fmt.Printf("  -version   Show version\n")
+		fmt.Printf("  -audit-report PATH  Generate compliance JSON report\n")
 		fmt.Printf("  -help      Show this help\n")
 		os.Exit(0)
 	}
@@ -65,6 +68,10 @@ func main() {
 	}
 
 	report := runSelfCheck()
+	if err := handleAudit(report, *auditReport); err != nil {
+		fmt.Fprintf(os.Stderr, "audit error: %v\n", err)
+		os.Exit(1)
+	}
 
 	if *outputJSON {
 		outputJSON, _ := json.MarshalIndent(report, "", "  ")
@@ -165,8 +172,8 @@ func checkAssets() CheckResult {
 // checkConfig verifica la configuración y disponibilidad de puertos
 func checkConfig() CheckResult {
 	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		homeDir = "/tmp"
+	if err != nil || homeDir == "" {
+		homeDir = "."
 	}
 
 	configDir := fmt.Sprintf("%s/.config/afarias19", homeDir)
@@ -265,6 +272,56 @@ func checkPermissions() CheckResult {
 		Message:   fmt.Sprintf("✅ Binary permissions verified"),
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
+}
+
+func handleAudit(report SelfCheckReport, reportPath string) error {
+	registry := errorspkg.NewRegistry()
+	auditor := auditpkg.NewAuditor(filepath.Join("audit", "self-check.log"))
+	for _, check := range report.Checks {
+		severity := errorspkg.SeverityLow
+		status := "ok"
+		switch check.Status {
+		case FAIL:
+			severity = errorspkg.SeverityCritical
+			status = "critical"
+		case WARN:
+			severity = errorspkg.SeverityMedium
+			status = "warning"
+		}
+		entry, err := registry.Register(errorspkg.ErrorSchema{
+			Code:      check.Name,
+			Message:   check.Message,
+			Severity:  severity,
+			Category:  "self-check",
+			Timestamp: time.Now().UTC(),
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := auditor.Append(entry.Code, status, entry.Message); err != nil {
+			return err
+		}
+	}
+	if err := auditor.VerifyChain(); err != nil {
+		return err
+	}
+	if reportPath != "" {
+		payload := map[string]any{
+			"report":      report,
+			"audit_trail": registry.AuditTrail(),
+		}
+		data, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(reportPath), 0755); err != nil && filepath.Dir(reportPath) != "." {
+			return err
+		}
+		if err := os.WriteFile(reportPath, data, 0644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // printReadableReport imprime el informe en formato legible

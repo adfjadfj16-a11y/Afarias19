@@ -1,0 +1,79 @@
+{
+  "audit_trail": [
+    {
+      "id": 1,
+      "code": "Assets",
+      "message": "✅ All 3 required assets present",
+      "severity": "LOW",
+      "category": "self-check",
+      "timestamp": "2026-10-06T05:02:31.353336659Z",
+      "hash256": "3473fee1f78cf9a8435f1ab656085e5fc80a76f9874a52133d3efe104f68baf3"
+    },
+    {
+      "id": 2,
+      "code": "Configuration",
+      "message": "✅ Config directory writable: /home/runner/.config/afarias19",
+      "severity": "LOW",
+      "category": "self-check",
+      "timestamp": "2026-10-06T05:02:31.353464497Z",
+      "hash256": "a6570ad2ce46923d74b4d06e2b321296fec2c49f305f208b3222b19d45f561bc",
+      "prev_hash": "3473fee1f78cf9a8435f1ab656085e5fc80a76f9874a52133d3efe104f68baf3"
+    },
+    {
+      "id": 3,
+      "code": "Environment",
+      "message": "✅ Runtime environment compatible",
+      "severity": "LOW",
+      "category": "self-check",
+      "timestamp": "2026-10-06T05:02:31.353505733Z",
+      "hash256": "8d9a9697bd0adaaaca983c012a96be70a5d81f67d1f4db320add154295a576d8",
+      "prev_hash": "a6570ad2ce46923d74b4d06e2b321296fec2c49f305f208b3222b19d45f561bc"
+    },
+    {
+      "id": 4,
+      "code": "Permissions",
+      "message": "✅ Binary permissions verified",
+      "severity": "LOW",
+      "category": "self-check",
+      "timestamp": "2026-10-06T05:02:31.353535178Z",
+      "hash256": "5dd7943b0c72e92989b6a787914e37e093160f1fc52bf83308f4de688851a8ce",
+      "prev_hash": "8d9a9697bd0adaaaca983c012a96be70a5d81f67d1f4db320add154295a576d8"
+    }
+  ],
+  "report": {
+    "version": "1.0.0",
+    "timestamp": "2026-10-06T05:02:31Z",
+    "status": "ok",
+    "checks": [
+      {
+        "name": "Assets",
+        "status": "PASS",
+        "message": "✅ All 3 required assets present",
+        "timestamp": "2026-10-06T05:02:31Z"
+      },
+      {
+        "name": "Configuration",
+        "status": "PASS",
+        "message": "✅ Config directory writable: /home/runner/.config/afarias19",
+        "timestamp": "2026-10-06T05:02:31Z"
+      },
+      {
+        "name": "Environment",
+        "status": "PASS",
+        "message": "✅ Runtime environment compatible",
+        "timestamp": "2026-10-06T05:02:31Z"
+      },
+      {
+        "name": "Permissions",
+        "status": "PASS",
+        "message": "✅ Binary permissions verified",
+        "timestamp": "2026-10-06T05:02:31Z"
+      }
+    ],
+    "summary": {
+      "FAIL": 0,
+      "PASS": 4,
+      "WARN": 0
+    }
+  }
+}

@@ -34,6 +34,12 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 - ✅ `CONTRIBUTING.md` (6.5 KB) — Guía de contribución
 - ✅ `SETUP_SECRETS.md` (8.5 KB) — Configuración de secrets GitHub
 
+### Added — Audit & Compliance (Pilar Adicional)
+- ✅ `pkg/errors/schema.go` — Registro auditable con índice O(log n) y hash SHA256 encadenado
+- ✅ `pkg/audit/auditor.go` — Bitácora persistente JSONL con verificación de integridad
+- ✅ `legalivypolyci.py` — Backend SQLite + exportación JSON para auditoría legal
+- ✅ `docs/AUDIT_COMPLIANCE.md` — Guía para verificación e inspección externa
+
 ### Added — FASE 2 Improvements
 - ✅ `persistence_manager_test.go` — Tests unitarios (16 tests, cobertura ≥80%)
 - ✅ `tests/test_bot_comprehensive.py` — Tests Python (20+ tests)
