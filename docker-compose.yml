@@ -1,0 +1,108 @@
+version: '3.9'
+
+services:
+  # Desarrollo: Self-check interactivo
+  self-check-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+    container_name: afarias19-self-check
+    environment:
+      - LOG_LEVEL=debug
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules  # Prevent host node_modules from mounting
+    working_dir: /workspace
+    command: /usr/local/bin/afarias19 -json -v
+    networks:
+      - afarias19-network
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/afarias19"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    stdin_open: true
+    tty: true
+
+  # Desarrollo: Bot de trading
+  bot-dev:
+    image: python:3.12-slim
+    container_name: afarias19-bot
+    environment:
+      - BINANCE_TESTNET=1
+      - ENABLE_LIVE_TRADING=NO
+      - SYMBOL=PEPEUSDT
+      - INTERVAL=5m
+      - QUOTE_ORDER_SIZE=5
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: python3 bot_spot_binance_safe.py
+    networks:
+      - afarias19-network
+    depends_on:
+      - self-check-dev
+
+  # Desarrollo: Tests
+  test-go:
+    image: golang:1.24-alpine
+    container_name: afarias19-test-go
+    environment:
+      - CGO_ENABLED=0
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      sh -c "
+        apk add --no-cache git gcc musl-dev &&
+        go mod download &&
+        go test -v -race -cover ./...
+      "
+    networks:
+      - afarias19-network
+
+  test-python:
+    image: python:3.12-slim
+    container_name: afarias19-test-python
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      sh -c "
+        pip install pytest pytest-cov &&
+        python3 -m pytest tests/ -v --cov
+      "
+    networks:
+      - afarias19-network
+
+  # Producción: Self-check (minimal, read-only)
+  self-check-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: afarias19-prod
+    environment:
+      - LOG_LEVEL=info
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/user/1000
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - afarias19-network
+    command: /usr/local/bin/afarias19
+    profiles:
+      - prod
+
+networks:
+  afarias19-network:
+    driver: bridge
+
+volumes:
+  cache:
+    driver: local
+  config:
+    driver: local
