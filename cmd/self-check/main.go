@@ -44,7 +44,25 @@ type SelfCheckReport struct {
 func main() {
 	outputJSON := flag.Bool("json", false, "Output in JSON format")
 	verbose := flag.Bool("v", false, "Verbose output")
+	help := flag.Bool("help", false, "Show help")
+	version := flag.Bool("version", false, "Show version")
 	flag.Parse()
+
+	if *help {
+		fmt.Printf("Afarias19 Self-Check Tool v1.0.0\n\n")
+		fmt.Printf("Usage: %s [options]\n\n", os.Args[0])
+		fmt.Printf("Options:\n")
+		fmt.Printf("  -json      Output in JSON format (default: human-readable)\n")
+		fmt.Printf("  -v         Verbose output (show remedies)\n")
+		fmt.Printf("  -version   Show version\n")
+		fmt.Printf("  -help      Show this help\n")
+		os.Exit(0)
+	}
+
+	if *version {
+		fmt.Println("Afarias19 Self-Check Tool v1.0.0")
+		os.Exit(0)
+	}
 
 	report := runSelfCheck()
 
