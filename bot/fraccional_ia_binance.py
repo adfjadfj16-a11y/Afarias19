@@ -1,4 +1,4 @@
-"""
+from guardian_notifica import notificar_bloqueo, notificar_orden_ok"""
 fraccional_ia_binance.py — Bot de trading fraccional con IA para Binance.
 
 Estrategias soportadas:
