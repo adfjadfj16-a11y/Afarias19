@@ -13,7 +13,12 @@ import time
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 
-from config import config
+from config import configfrom config import config
+config.validate()  # activa bloqueo real Chile y tope 10%
+
+# === AUDITORIA TOPE 10% Y CHILE INTOCABLE ===
+# TOPE 10% - nunca más de 0.10
+SALDO_CHILE_INTOCABLE = "BLOQUEADO - NO USAR EN ORDENES"  # solo lectura auditoria
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL.upper(), logging.INFO),
