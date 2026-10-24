@@ -5,3 +5,11 @@ __pycache__/
 *.pyo
 .venv/
 venv/
+
+*.backup
+*.save
+__pycache__/
+*.pyc
+tope]
+i*
+
