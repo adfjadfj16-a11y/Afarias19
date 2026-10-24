@@ -3,7 +3,8 @@ fraccional_ia_binance.py — Bot de trading fraccional con IA para Binance.
 
 Estrategias soportadas:
   - sma_cross : cruce de medias móviles SMA 20 / SMA 50
-  - rsi       : RSI < 30 compra, RSI > 70 vende
+ 
+ - rsi       : RSI < 30 compra, RSI > 70 vende
   - openai    : señal vía GPT usando datos de velas recientes
 """
 import logging
@@ -109,12 +110,15 @@ def get_balance(client: Client, asset: str) -> float:
 
 
 def place_order(client: Client, pair: str, side: str, fraction: float) -> None:
+    if config.DRY_RUN or not config.LIVE_TRADING_ENABLED:
+        log.warning("ORDEN BLOQUEADA: DRY_RUN=%s LIVE_TRADING_ENABLED=%s", config.DRY_RUN, config.LIVE_TRADING_ENABLED)
+        return
     quote_asset = pair[-4:] if pair.endswith("USDT") else pair[-3:]
     base_asset = pair[: -len(quote_asset)]
 
     if side == "BUY":
         balance = get_balance(client, quote_asset)
-        spend = balance * fraction
+        spend = balance * fraction_efectiva
         ticker = client.get_symbol_ticker(symbol=pair)
         price = float(ticker["price"])
         qty = spend / price
@@ -129,7 +133,7 @@ def place_order(client: Client, pair: str, side: str, fraction: float) -> None:
 
     elif side == "SELL":
         balance = get_balance(client, base_asset)
-        qty = balance * fraction
+        qty = balance * fraction_efectiva
         info = client.get_symbol_info(pair)
         step = float(next(f["stepSize"] for f in info["filters"] if f["filterType"] == "LOT_SIZE"))
         qty = round(qty - (qty % step), 8)
