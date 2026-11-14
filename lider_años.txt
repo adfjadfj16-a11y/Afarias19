@@ -1,0 +1,4 @@
+2026: Consolidar - AFP B/C, Bot DRY_RUN, Piloto 70L La Negra
+2027: Escalar - 2 bencineras, 200L/mes, Renta 4 > $500k
+2028-2030: Mantener - AFP sin tocar, Bot 10% max, PET 3 ton/mes
+Regla: Nunca cruzar tope 10%, nunca tocar Chile intocable, todo con factura SII
